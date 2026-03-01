@@ -10,7 +10,7 @@ const pool = new Pool({
   },
   max: 20,                    // Maximum connections in pool
   idleTimeoutMillis: 30000,   // Close idle connections after 30s
-  connectionTimeoutMillis: 10000, // Timeout after 10s if can't connect
+  connectionTimeoutMillis: 30000, // Timeout after 30s if can't connect (increased for serverless)
 });
 
 
@@ -81,14 +81,27 @@ export const queryMany = async <T extends QueryResultRow = any>(
 
 
 export const connectPostgreSQL = async (): Promise<void> => {
-  try {
-    const result = await query("SELECT NOW() as current_time, version()");
-    logger.info(
-      `PostgreSQL connected successfully | Time: ${result.rows[0].current_time}`
-    );
-  } catch (error: any) {
-    logger.error(`❌ PostgreSQL connection failed: ${error.message}`);
-    throw error;
+  const maxRetries = 5;
+  let attempt = 0;
+
+  while (attempt < maxRetries) {
+    try {
+      const result = await query("SELECT NOW() as current_time, version()");
+      logger.info(
+        `PostgreSQL connected successfully | Time: ${result.rows[0].current_time}`
+      );
+      return;
+    } catch (error: any) {
+      attempt++;
+      if (attempt >= maxRetries) {
+        logger.error(`❌ PostgreSQL connection failed after ${maxRetries} attempts: ${error.message}`);
+        throw error;
+      }
+      
+      const delay = Math.pow(2, attempt) * 1000; // Exponential backoff: 2s, 4s, 8s, 16s
+      logger.warn(`⚠️ PostgreSQL connection attempt ${attempt} failed. Retrying in ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
   }
 };
 

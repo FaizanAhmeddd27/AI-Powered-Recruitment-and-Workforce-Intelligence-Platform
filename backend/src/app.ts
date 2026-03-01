@@ -4,13 +4,14 @@ import helmet from "helmet";
 import morgan from "morgan";
 import cookieParser from "cookie-parser";
 import passport from "passport";
-
 import env from "./config/env";
 import { errorHandler, notFoundHandler } from "./middleware/error.middleware";
 import logger from "./utils/logger.utils";
+import "./config/passport";
+import routes from "./routes/index";
 
+// Create Express app
 const app: Application = express();
-
 
 app.use(helmet());
 
@@ -52,22 +53,21 @@ app.get("/api/health", (_req, res) => {
     message: "AI Recruitment Platform API is running!",
     timestamp: new Date().toISOString(),
     environment: env.NODE_ENV,
+    endpoints: {
+      auth: "/api/auth",
+      candidate: "/api/candidate",
+      recruiter: "/api/recruiter",
+      jobs: "/api/jobs",
+      resume: "/api/resume",
+      applications: "/api/applications",
+      ai: "/api/ai",
+      admin: "/api/admin",
+    },
   });
 });
 
-// ============================================
-// API ROUTES (will be added in next steps)
-// ============================================
-// app.use("/api/auth", authRoutes);
-// app.use("/api/candidate", candidateRoutes);
-// app.use("/api/recruiter", recruiterRoutes);
-// app.use("/api/jobs", jobRoutes);
-// app.use("/api/resume", resumeRoutes);
-// app.use("/api/applications", applicationRoutes);
-// app.use("/api/ai", aiRoutes);
-// app.use("/api/admin", adminRoutes);
 
-
+app.use("/api", routes);
 app.use(notFoundHandler);
 app.use(errorHandler);
 
