@@ -118,8 +118,8 @@ export const googleCallback = (
           path: "/api/auth",
         });
 
-        // Redirect to frontend with token
-        const redirectUrl = `${env.CLIENT_URL}/oauth/callback?token=${result.accessToken}&isNew=${result.isNewUser}`;
+        // Redirect to frontend with tokens
+        const redirectUrl = `${env.CLIENT_URL}/oauth/callback?token=${result.accessToken}&refreshToken=${result.refreshToken}&isNew=${result.isNewUser}`;
         res.redirect(redirectUrl);
       } catch (error: any) {
         logger.error(`❌ Google callback error: ${error.message}`);
@@ -177,7 +177,7 @@ export const githubCallback = (
           path: "/api/auth",
         });
 
-        const redirectUrl = `${env.CLIENT_URL}/oauth/callback?token=${result.accessToken}&isNew=${result.isNewUser}`;
+        const redirectUrl = `${env.CLIENT_URL}/oauth/callback?token=${result.accessToken}&refreshToken=${result.refreshToken}&isNew=${result.isNewUser}`;
         res.redirect(redirectUrl);
       } catch (error: any) {
         logger.error(`❌ GitHub callback error: ${error.message}`);
