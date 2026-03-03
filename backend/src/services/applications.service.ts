@@ -14,6 +14,16 @@ import {
   invalidateAdminCaches,
   cachedFetch,
 } from "./cache.service";
+import {
+  notifyApplicationUnderReview,
+  notifyApplicationShortlisted,
+  notifyApplicationRejected,
+  notifyInterviewScheduled,
+  notifyOfferReceived,
+  notifyRecruiterStatusChange,
+  notifyApplicationWithdrawn,
+  createNotification,
+} from "./notification.service";
 import logger from "../utils/logger.utils";
 
 
@@ -109,6 +119,7 @@ export const applyForJob = async (
   // 6. Invalidate relevant caches
   await invalidateApplicationCaches(jobId, candidateId);
   await invalidateJobCaches(jobId);
+  await invalidateRecruiterCaches(job.recruiter_id);
   await invalidateAdminCaches();
 
   logger.info(
@@ -392,11 +403,17 @@ export const updateApplicationStatus = async (
     throw new AppError("You can only update applications for your own jobs", 403);
   }
 
+  // Get candidate name for notifications
+  const candidate = await queryOne<{ full_name: string }>(
+    `SELECT full_name FROM users WHERE id = $1`,
+    [application.candidate_id]
+  );
+
   // 3. Validate status transition
   const validTransitions: Record<string, string[]> = {
-    pending: ["under_review", "rejected"],
+    pending: ["under_review"],
     under_review: ["shortlisted", "rejected"],
-    shortlisted: ["interview", "rejected"],
+    shortlisted: ["interview"],
     interview: ["offered", "rejected"],
     offered: ["hired", "rejected"],
     hired: [],           // Final state
@@ -444,7 +461,41 @@ export const updateApplicationStatus = async (
 
   // 5. Invalidate caches
   await invalidateApplicationCaches(application.job_id, application.candidate_id);
+  await invalidateRecruiterCaches(recruiterId);
   await invalidateAdminCaches();
+
+  // 6. Send notifications based on status transition
+  try {
+    if (currentStatus === "pending" && newStatus === "under_review") {
+      await notifyApplicationUnderReview(application.candidate_id, applicationId, job.title);
+    }
+
+    if (currentStatus === "under_review" && newStatus === "shortlisted") {
+      await notifyApplicationShortlisted(application.candidate_id, applicationId, job.title);
+    }
+
+    if (
+      (currentStatus === "under_review" && newStatus === "rejected") ||
+      (currentStatus === "interview" && newStatus === "rejected") ||
+      (currentStatus === "offered" && newStatus === "rejected")
+    ) {
+      await notifyApplicationRejected(application.candidate_id, applicationId, job.title);
+    }
+
+    if (currentStatus === "pending" || currentStatus === "under_review" || currentStatus === "shortlisted") {
+      // Notify recruiter of status change
+      await notifyRecruiterStatusChange(
+        recruiterId,
+        applicationId,
+        candidate?.full_name || "Unknown",
+        job.title,
+        newStatus
+      );
+    }
+  } catch (notifyError) {
+    // Log notification error but don't fail the status update
+    logger.error(`Failed to send notifications for application ${applicationId}:`, notifyError);
+  }
 
   logger.info(
     `Application ${applicationId} status: ${currentStatus} → ${newStatus}`
@@ -511,91 +562,6 @@ export const addRecruiterNotes = async (
   ]);
 
   logger.debug(`Recruiter notes added to application: ${applicationId}`);
-
-  return updated;
-};
-
-
-export const withdrawApplication = async (
-  applicationId: string,
-  candidateId: string,
-  reason?: string | null
-): Promise<any> => {
-  // 1. Get application
-  const application = await queryOne<{
-    id: string;
-    candidate_id: string;
-    job_id: string;
-    status: string;
-  }>(
-    `SELECT id, candidate_id, job_id, status FROM applications WHERE id = $1`,
-    [applicationId]
-  );
-
-  if (!application) {
-    throw new AppError("Application not found", 404);
-  }
-
-  // 2. Verify ownership
-  if (application.candidate_id !== candidateId) {
-    throw new AppError("You can only withdraw your own applications", 403);
-  }
-
-  // 3. Check if withdrawable
-  const nonWithdrawable = ["hired", "rejected", "withdrawn"];
-  if (nonWithdrawable.includes(application.status)) {
-    throw new AppError(
-      `Cannot withdraw application with status "${application.status}"`,
-      400
-    );
-  }
-
-  // 4. Update status to withdrawn
-  const updated = await transaction(async (client) => {
-    const result = await client.query(
-      `UPDATE applications 
-       SET status = 'withdrawn', 
-           recruiter_notes = CASE 
-             WHEN recruiter_notes IS NOT NULL 
-             THEN recruiter_notes || E'\n[Candidate withdrew: ' || COALESCE($2, 'No reason given') || ']'
-             ELSE '[Candidate withdrew: ' || COALESCE($2, 'No reason given') || ']'
-           END,
-           updated_at = NOW()
-       WHERE id = $1
-       RETURNING *`,
-      [applicationId, reason || "No reason given"]
-    );
-
-    // Decrement job applications count
-    await client.query(
-      `UPDATE jobs SET applications_count = GREATEST(0, applications_count - 1) WHERE id = $1`,
-      [application.job_id]
-    );
-
-    // Log activity
-    await client.query(
-      `INSERT INTO activity_log (user_id, action, entity_type, entity_id, metadata)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [
-        candidateId,
-        "application_withdrawn",
-        "application",
-        applicationId,
-        JSON.stringify({
-          job_id: application.job_id,
-          reason: reason || null,
-        }),
-      ]
-    );
-
-    return result.rows[0];
-  });
-
-  // 5. Invalidate caches
-  await invalidateApplicationCaches(application.job_id, candidateId);
-  await invalidateJobCaches(application.job_id);
-
-  logger.info(`Application withdrawn: ${applicationId} by ${candidateId}`);
 
   return updated;
 };
@@ -679,6 +645,151 @@ export const getRecentApplicationsForRecruiter = async (
   );
 
   return applications;
+};
+
+
+export const withdrawApplication = async (
+  applicationId: string,
+  candidateId: string,
+  withdrawalReason?: string
+): Promise<any> => {
+  // 1. Get application
+  const application = await queryOne<{
+    id: string;
+    candidate_id: string;
+    status: string;
+    job_id: string;
+  }>(
+    `SELECT a.id, a.candidate_id, a.status, a.job_id
+     FROM applications a
+     WHERE a.id = $1`,
+    [applicationId]
+  );
+
+  if (!application) {
+    throw new AppError("Application not found", 404);
+  }
+
+  // 2. Verify candidate owns the application
+  if (application.candidate_id !== candidateId) {
+    throw new AppError("You can only withdraw your own applications", 403);
+  }
+
+  // 3. Check if already in final state
+  if (["hired", "rejected"].includes(application.status)) {
+    throw new AppError(
+      `Cannot withdraw application with status: ${application.status}`,
+      400
+    );
+  }
+
+  // 4. Get job info for notification
+  const job = await queryOne<{ recruiter_id: string; title: string }>(
+    `SELECT recruiter_id, title FROM jobs WHERE id = $1`,
+    [application.job_id]
+  );
+
+  const candidate = await queryOne<{ full_name: string }>(
+    `SELECT full_name FROM users WHERE id = $1`,
+    [candidateId]
+  );
+
+  // 5. Update application status
+  const updated = await transaction(async (client) => {
+    const result = await client.query(
+      `UPDATE applications 
+       SET status = 'withdrawn', withdrawn_at = NOW(), updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [applicationId]
+    );
+
+    // Log activity
+    await client.query(
+      `INSERT INTO activity_log (user_id, action, entity_type, entity_id, metadata)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        candidateId,
+        "application_withdrawn",
+        "application",
+        applicationId,
+        JSON.stringify({
+          previous_status: application.status,
+          new_status: "withdrawn",
+          reason: withdrawalReason || null,
+        }),
+      ]
+    );
+
+    return result.rows[0];
+  });
+
+  // 6. Send notifications
+  try {
+    // Notify recruiter of withdrawal
+    if (job) {
+      await notifyApplicationWithdrawn(
+        job.recruiter_id,
+        applicationId,
+        candidate?.full_name || "A candidate",
+        job.title,
+        withdrawalReason
+      );
+    }
+
+    // Notify candidate that withdrawal is complete
+    await createNotification({
+      user_id: candidateId,
+      type: "application_withdrawn",
+      title: "Application Withdrawn",
+      message: `You have successfully withdrawn your application for "${job?.title || "the position"}".`,
+      related_entity_type: "application",
+      related_entity_id: applicationId,
+    });
+  } catch (notifyError) {
+    logger.error(`Failed to send withdrawal notifications:`, notifyError);
+  }
+
+  // 7. Invalidate caches
+  await invalidateApplicationCaches(application.job_id, candidateId);
+  if (job?.recruiter_id) {
+    await invalidateRecruiterCaches(job.recruiter_id);
+  }
+  await invalidateAdminCaches();
+
+  logger.info(`Application ${applicationId} withdrawn by candidate ${candidateId}`);
+
+  return updated;
+};
+
+export const getApplicationDetails = async (
+  applicationId: string
+): Promise<any> => {
+  const application = await queryOne<{
+    id: string;
+    candidate_id: string;
+    job_id: string;
+  }>(
+    `SELECT a.id, a.candidate_id, a.job_id, a.status
+     FROM applications a
+     WHERE a.id = $1`,
+    [applicationId]
+  );
+
+  if (!application) {
+    throw new AppError("Application not found", 404);
+  }
+
+  const job = await queryOne<{ recruiter_id: string; title: string }>(
+    `SELECT recruiter_id, title FROM jobs WHERE id = $1`,
+    [application.job_id]
+  );
+
+  return {
+    ...application,
+    recruiter_id: job?.recruiter_id,
+    job_title: job?.title,
+  };
 };
 
 

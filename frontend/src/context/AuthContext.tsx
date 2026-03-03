@@ -68,6 +68,11 @@ interface AuthContextType extends AuthState {
   signup: (data: SignupPayload) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (data: Partial<User>) => void;
+  completeOAuthLogin: (data: {
+    user: User;
+    accessToken: string;
+    refreshToken?: string;
+  }) => void;
   getDashboardPath: () => string;
 }
 
@@ -84,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const paths: Record<UserRole, string> = {
       candidate: "/candidate/dashboard",
       recruiter: "/recruiter/dashboard",
-      admin: "/",
+      admin: "/admin/dashboard",
     };
     return paths[state.user.role] || "/login";
   }, [state.user]);
@@ -156,12 +161,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         dispatch({ type: "AUTH_SUCCESS", payload: { user, accessToken } });
 
-        toast.success(`Welcome back, ${user.full_name}!`);
+        const userName = user.full_name?.trim() || "there";
+        toast.success(`Welcome back, ${userName}!`);
 
         const paths: Record<UserRole, string> = {
           candidate: "/candidate/dashboard",
           recruiter: "/recruiter/dashboard",
-          admin: "/",
+          admin: "/admin/dashboard",
         };
         navigate(paths[user.role]);
       }
@@ -187,7 +193,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         dispatch({ type: "AUTH_SUCCESS", payload: { user, accessToken } });
 
-        toast.success(`Welcome to AI Recruit, ${user.full_name}!`);
+        const userName = user.full_name?.trim() || "there";
+        toast.success(`Welcome to AI Recruit, ${userName}!`);
 
         const paths: Record<UserRole, string> = {
           candidate: "/candidate/dashboard",
@@ -229,9 +236,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const completeOAuthLogin = (data: {
+    user: User;
+    accessToken: string;
+    refreshToken?: string;
+  }) => {
+    localStorage.setItem("accessToken", data.accessToken);
+    if (data.refreshToken) {
+      localStorage.setItem("refreshToken", data.refreshToken);
+    }
+    localStorage.setItem("user", JSON.stringify(data.user));
+    dispatch({
+      type: "AUTH_SUCCESS",
+      payload: { user: data.user, accessToken: data.accessToken },
+    });
+  };
+
   return (
     <AuthContext.Provider
-      value={{ ...state, login, signup, logout, updateUser, getDashboardPath }}
+      value={{
+        ...state,
+        login,
+        signup,
+        logout,
+        updateUser,
+        completeOAuthLogin,
+        getDashboardPath,
+      }}
     >
       {children}
     </AuthContext.Provider>

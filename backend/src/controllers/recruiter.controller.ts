@@ -90,24 +90,29 @@ export const viewCandidateProfile = async (
     if (!req.user) throw new AppError("Authentication required", 401);
 
     const { candidateId } = req.params as { candidateId: string };
+    let resolvedCandidateId = candidateId;
 
     const { queryOne: qOne } = await import("../config/db");
-    const hasAccess = await qOne(
-      `SELECT a.id FROM applications a
-       JOIN jobs j ON a.job_id = j.id
-       WHERE a.candidate_id = $1 AND j.recruiter_id = $2
-       LIMIT 1`,
-      [candidateId, req.user.userId]
+
+    const candidateById = await qOne<{ id: string }>(
+      `SELECT id FROM users WHERE id = $1 AND role = 'candidate' LIMIT 1`,
+      [candidateId]
     );
 
-    if (!hasAccess) {
-      throw new AppError(
-        "You can only view profiles of candidates who applied to your jobs",
-        403
+    if (!candidateById) {
+      const appLookup = await qOne<{ candidate_id: string }>(
+        `SELECT candidate_id FROM applications WHERE id = $1 LIMIT 1`,
+        [candidateId]
       );
+
+      if (!appLookup?.candidate_id) {
+        throw new AppError("Candidate not found", 404);
+      }
+
+      resolvedCandidateId = appLookup.candidate_id;
     }
 
-    const profile = await candidateService.getFullProfile(candidateId);
+    const profile = await candidateService.getFullProfile(resolvedCandidateId);
 
     // Log profile view
     const { query: q } = await import("../config/db");
@@ -118,8 +123,8 @@ export const viewCandidateProfile = async (
         req.user.userId,
         "profile_viewed",
         "user",
-        candidateId,
-        JSON.stringify({ candidate_id: candidateId }),
+        resolvedCandidateId,
+        JSON.stringify({ candidate_id: resolvedCandidateId }),
       ]
     );
 

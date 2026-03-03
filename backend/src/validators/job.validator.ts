@@ -100,6 +100,8 @@ export const createJobSchema = z.object({
 
 export const updateJobSchema = z.object({
   title: z.string().min(3).max(255).trim().optional(),
+  company: z.string().min(2).max(255).trim().optional(),
+  department: z.string().max(255).trim().optional().nullable(),
   description: z.string().min(50).max(10000).optional(),
   location: z.string().min(2).max(255).trim().optional(),
   job_type: z
@@ -113,7 +115,18 @@ export const updateJobSchema = z.object({
   max_experience_years: z.number().min(0).max(50).optional(),
   salary_min: z.number().min(0).optional().nullable(),
   salary_max: z.number().min(0).optional().nullable(),
+  salary_currency: z.string().max(10).optional(),
   benefits: z.array(z.string().max(100)).max(20).optional(),
+  skills: z
+    .array(
+      z.object({
+        skill_name: z.string().min(1).max(100).trim(),
+        min_years: z.number().min(0).max(30).default(0),
+        is_required: z.boolean().default(true),
+      })
+    )
+    .max(20)
+    .optional(),
   status: z.enum(["active", "closed", "draft", "paused"]).optional(),
 });
 

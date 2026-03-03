@@ -317,7 +317,7 @@ export const getRecruiterJobs = async (
 export const updateJob = async (
   jobId: string,
   recruiterId: string,
-  data: Partial<IJob>
+  data: Partial<IJob & { skills: IJobSkill[] }>
 ): Promise<any> => {
   // 1. Check if job exists and belongs to recruiter
   const existingJob = await queryOne(
@@ -333,30 +333,58 @@ export const updateJob = async (
     throw new AppError("You can only update your own jobs", 403);
   }
 
-  // 2. Update job
-  const updatedJob = await queryOne(JobQueries.updateJob, [
-    jobId,
-    data.title || null,
-    data.description || null,
-    data.location || null,
-    data.job_type || null,
-    data.salary_min ?? null,
-    data.salary_max ?? null,
-    data.status || null,
-    recruiterId,
-  ]);
+  const result = await transaction(async (client) => {
+    // 2. Update job core fields
+    const updatedJobResult = await client.query(JobQueries.updateJob, [
+      jobId,
+      data.title || null,
+      data.company || null,
+      data.department || null,
+      data.description || null,
+      data.location || null,
+      data.job_type || null,
+      data.workplace_type || null,
+      data.experience_level || null,
+      data.min_experience_years ?? null,
+      data.max_experience_years ?? null,
+      data.salary_min ?? null,
+      data.salary_max ?? null,
+      data.salary_currency || null,
+      data.benefits ?? null,
+      data.status || null,
+      recruiterId,
+    ]);
 
-  if (!updatedJob) {
-    throw new AppError("Failed to update job", 500);
-  }
+    const updatedJob = updatedJobResult.rows[0];
 
-  // 3. Invalidate caches
+    if (!updatedJob) {
+      throw new AppError("Failed to update job", 500);
+    }
+
+    // 3. Replace skills if provided
+    if (Array.isArray(data.skills)) {
+      await client.query(`DELETE FROM job_skills WHERE job_id = $1`, [jobId]);
+
+      for (const skill of data.skills) {
+        await client.query(JobQueries.addJobSkill, [
+          jobId,
+          skill.skill_name,
+          skill.min_years,
+          skill.is_required,
+        ]);
+      }
+    }
+
+    return updatedJob;
+  });
+
+  // 4. Invalidate caches
   await invalidateJobCaches(jobId);
   await invalidateRecruiterCaches(recruiterId);
 
   logger.info(`Job updated: ${jobId}`);
 
-  return updatedJob;
+  return result;
 };
 
 

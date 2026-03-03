@@ -7,6 +7,9 @@ import aiRoutes from "./ai.routes";
 import candidateRoutes from "./candidate.routes";
 import recruiterRoutes from "./recruiter.routes";
 import adminRoutes from "./admin.routes";
+import interviewRoutes from "./interview.routes";
+import offerRoutes from "./offer.routes";
+import notificationRoutes from "./notification.routes";
 
 const router = Router();
 
@@ -19,5 +22,8 @@ router.use("/ai", aiRoutes);
 router.use("/candidate", candidateRoutes);
 router.use("/recruiter", recruiterRoutes);
 router.use("/admin", adminRoutes);
+router.use("/", interviewRoutes);
+router.use("/", offerRoutes);
+router.use("/", notificationRoutes);
 
 export default router;

@@ -1,89 +1,77 @@
 import { queryOne, queryMany } from "../config/db";
 import { AppError } from "../middleware/error.middleware";
-import { CacheKeys, CacheDuration, cachedFetch } from "./cache.service";
 import logger from "../utils/logger.utils";
 
 
 export const getDashboardData = async (
   recruiterId: string
 ): Promise<any> => {
-  const cacheKey = `recruiter:dashboard:${recruiterId}`;
-
-  return cachedFetch(
-    cacheKey,
-    async () => {
-      // Stats
-      const stats = await queryOne(
-        `SELECT
-           COUNT(DISTINCT j.id) as total_jobs,
-           COUNT(DISTINCT j.id) FILTER (WHERE j.status = 'active') as active_jobs,
-           COUNT(DISTINCT j.id) FILTER (WHERE j.status = 'closed') as closed_jobs,
-           COUNT(a.id) as total_applications,
-           COUNT(a.id) FILTER (WHERE a.status = 'pending') as pending_applications,
-           COUNT(a.id) FILTER (WHERE a.status = 'shortlisted') as shortlisted,
-           COUNT(a.id) FILTER (WHERE a.status = 'interview') as in_interview,
-           COUNT(a.id) FILTER (WHERE a.status = 'hired') as hired,
-           COUNT(a.id) FILTER (WHERE a.status = 'rejected') as rejected,
-           ROUND(AVG(a.ai_match_score)::numeric, 1) as avg_match_score
-         FROM jobs j
-         LEFT JOIN applications a ON j.id = a.job_id
-         WHERE j.recruiter_id = $1`,
-        [recruiterId]
-      );
-
-      // Active jobs with app counts
-      const activeJobs = await queryMany(
-        `SELECT j.id, j.title, j.company, j.location, j.status,
-                j.applications_count, j.views_count, j.created_at,
-                ROUND(AVG(a.ai_match_score)::numeric, 1) as avg_ai_score,
-                COUNT(a.id) FILTER (WHERE a.status = 'pending') as pending_count,
-                COUNT(a.id) FILTER (WHERE a.status = 'shortlisted') as shortlisted_count
-         FROM jobs j
-         LEFT JOIN applications a ON j.id = a.job_id
-         WHERE j.recruiter_id = $1 AND j.status = 'active'
-         GROUP BY j.id
-         ORDER BY j.created_at DESC
-         LIMIT 10`,
-        [recruiterId]
-      );
-
-      // Recent applications
-      const recentApps = await queryMany(
-        `SELECT a.id, a.status, a.ai_match_score, a.applied_at,
-                j.title as job_title, j.company as job_company,
-                u.full_name as candidate_name, u.email as candidate_email,
-                u.avatar_url as candidate_avatar,
-                cp.headline as candidate_headline
-         FROM applications a
-         JOIN jobs j ON a.job_id = j.id
-         JOIN users u ON a.candidate_id = u.id
-         LEFT JOIN candidate_profiles cp ON u.id = cp.user_id
-         WHERE j.recruiter_id = $1
-         ORDER BY a.applied_at DESC
-         LIMIT 10`,
-        [recruiterId]
-      );
-
-      // Application trend (last 7 days)
-      const trend = await queryMany(
-        `SELECT DATE(a.applied_at) as date, COUNT(*) as count
-         FROM applications a
-         JOIN jobs j ON a.job_id = j.id
-         WHERE j.recruiter_id = $1 AND a.applied_at > NOW() - INTERVAL '7 days'
-         GROUP BY DATE(a.applied_at)
-         ORDER BY date`,
-        [recruiterId]
-      );
-
-      return {
-        stats,
-        activeJobs,
-        recentApplications: recentApps,
-        applicationTrend: trend,
-      };
-    },
-    CacheDuration.SHORT
+  const stats = await queryOne(
+    `SELECT
+       COUNT(DISTINCT j.id) as total_jobs,
+       COUNT(DISTINCT j.id) FILTER (WHERE j.status = 'active') as active_jobs,
+       COUNT(DISTINCT j.id) FILTER (WHERE j.status = 'closed') as closed_jobs,
+       COUNT(a.id) as total_applications,
+       COUNT(a.id) FILTER (WHERE a.status = 'pending') as pending_applications,
+       COUNT(a.id) FILTER (WHERE a.status = 'shortlisted') as shortlisted,
+       COUNT(a.id) FILTER (WHERE a.status = 'interview') as in_interview,
+       COUNT(a.id) FILTER (WHERE a.status = 'hired') as hired,
+       COUNT(a.id) FILTER (WHERE a.status = 'rejected') as rejected,
+       ROUND(AVG(a.ai_match_score)::numeric, 1) as avg_match_score
+     FROM jobs j
+     LEFT JOIN applications a ON j.id = a.job_id
+     WHERE j.recruiter_id = $1`,
+    [recruiterId]
   );
+
+  const activeJobs = await queryMany(
+    `SELECT j.id, j.title, j.company, j.location, j.status,
+            j.applications_count, j.views_count, j.created_at,
+            ROUND(AVG(a.ai_match_score)::numeric, 1) as avg_ai_score,
+            COUNT(a.id) FILTER (WHERE a.status = 'pending') as pending_count,
+            COUNT(a.id) FILTER (WHERE a.status = 'shortlisted') as shortlisted_count
+     FROM jobs j
+     LEFT JOIN applications a ON j.id = a.job_id
+     WHERE j.recruiter_id = $1 AND j.status = 'active'
+     GROUP BY j.id
+     ORDER BY j.created_at DESC
+     LIMIT 10`,
+    [recruiterId]
+  );
+
+  const recentApps = await queryMany(
+    `SELECT a.id, a.status, a.ai_match_score, a.applied_at,
+            j.title as job_title, j.company as job_company,
+            a.candidate_id as candidate_id, a.candidate_id as "candidateId",
+            u.full_name as candidate_name, u.email as candidate_email,
+            u.avatar_url as candidate_avatar,
+            cp.headline as candidate_headline
+     FROM applications a
+     JOIN jobs j ON a.job_id = j.id
+     JOIN users u ON a.candidate_id = u.id
+     LEFT JOIN candidate_profiles cp ON u.id = cp.user_id
+     WHERE j.recruiter_id = $1
+     ORDER BY a.applied_at DESC
+     LIMIT 10`,
+    [recruiterId]
+  );
+
+  const trend = await queryMany(
+    `SELECT DATE(a.applied_at) as date, COUNT(*) as count
+     FROM applications a
+     JOIN jobs j ON a.job_id = j.id
+     WHERE j.recruiter_id = $1 AND a.applied_at > NOW() - INTERVAL '7 days'
+     GROUP BY DATE(a.applied_at)
+     ORDER BY date`,
+    [recruiterId]
+  );
+
+  return {
+    stats,
+    activeJobs,
+    recentApplications: recentApps,
+    applicationTrend: trend,
+  };
 };
 
 

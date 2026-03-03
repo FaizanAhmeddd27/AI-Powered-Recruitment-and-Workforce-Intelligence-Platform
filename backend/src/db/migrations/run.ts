@@ -7,18 +7,71 @@ const runMigrations = async (): Promise<void> => {
   try {
     logger.info("Starting database migrations...");
 
-    // Connect to PostgreSQL
     await connectPostgreSQL();
 
-    // Read SQL file
-    const sqlPath = path.join(__dirname, "001_initial_schema.sql");
-    const sql = fs.readFileSync(sqlPath, "utf-8");
+    await query(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        id SERIAL PRIMARY KEY,
+        filename TEXT UNIQUE NOT NULL,
+        applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
 
-    // Execute migration
-    await query(sql);
-    logger.info("Migration 001_initial_schema.sql executed successfully");
+    const migrationFiles = fs
+      .readdirSync(__dirname)
+      .filter((file) => /^\d+.*\.sql$/i.test(file))
+      .sort((a, b) => a.localeCompare(b));
 
-    // Verify tables created
+    const has001 = migrationFiles.includes("001_initial_schema.sql");
+    if (has001) {
+      const hasBaseUsersTable = await query(
+        `SELECT 1
+         FROM information_schema.tables
+         WHERE table_schema = 'public' AND table_name = 'users'
+         LIMIT 1`
+      );
+
+      const tracked001 = await query(
+        `SELECT 1 FROM schema_migrations WHERE filename = $1 LIMIT 1`,
+        ["001_initial_schema.sql"]
+      );
+
+      if ((hasBaseUsersTable.rowCount || 0) > 0 && (tracked001.rowCount || 0) === 0) {
+        await query(`INSERT INTO schema_migrations (filename) VALUES ($1)`, [
+          "001_initial_schema.sql",
+        ]);
+        logger.info(
+          "Detected existing base schema. Marked 001_initial_schema.sql as already applied."
+        );
+      }
+    }
+
+    if (migrationFiles.length === 0) {
+      logger.info("No migration files found.");
+    }
+
+    for (const filename of migrationFiles) {
+      const alreadyApplied = await query(
+        `SELECT 1 FROM schema_migrations WHERE filename = $1 LIMIT 1`,
+        [filename]
+      );
+
+      if (alreadyApplied.rowCount && alreadyApplied.rowCount > 0) {
+        logger.info(`Skipping already applied migration: ${filename}`);
+        continue;
+      }
+
+      const sqlPath = path.join(__dirname, filename);
+      const sql = fs.readFileSync(sqlPath, "utf-8");
+
+      await query(sql);
+      await query(`INSERT INTO schema_migrations (filename) VALUES ($1)`, [
+        filename,
+      ]);
+
+      logger.info(`Migration ${filename} executed successfully`);
+    }
+
     const tablesResult = await query(`
       SELECT table_name 
       FROM information_schema.tables 
@@ -31,7 +84,6 @@ const runMigrations = async (): Promise<void> => {
       logger.info(`   ├── ${row.table_name}`);
     });
 
-    // Close connection
     await closePostgreSQL();
     logger.info("Migrations completed successfully!");
     process.exit(0);

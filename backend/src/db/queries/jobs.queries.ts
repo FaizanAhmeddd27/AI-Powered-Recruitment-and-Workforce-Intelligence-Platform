@@ -70,13 +70,21 @@ export const JobQueries = {
   updateJob: `
     UPDATE jobs 
     SET title = COALESCE($2, title),
-        description = COALESCE($3, description),
-        location = COALESCE($4, location),
-        job_type = COALESCE($5, job_type),
-        salary_min = COALESCE($6, salary_min),
-        salary_max = COALESCE($7, salary_max),
-        status = COALESCE($8, status)
-    WHERE id = $1 AND recruiter_id = $9
+        company = COALESCE($3, company),
+        department = COALESCE($4, department),
+        description = COALESCE($5, description),
+        location = COALESCE($6, location),
+        job_type = COALESCE($7, job_type),
+        workplace_type = COALESCE($8, workplace_type),
+        experience_level = COALESCE($9, experience_level),
+        min_experience_years = COALESCE($10, min_experience_years),
+        max_experience_years = COALESCE($11, max_experience_years),
+        salary_min = COALESCE($12, salary_min),
+        salary_max = COALESCE($13, salary_max),
+        salary_currency = COALESCE($14, salary_currency),
+        benefits = COALESCE($15, benefits),
+        status = COALESCE($16, status)
+    WHERE id = $1 AND recruiter_id = $17
     RETURNING *
   `,
 

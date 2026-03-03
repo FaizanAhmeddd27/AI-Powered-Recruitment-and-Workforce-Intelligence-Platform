@@ -13,6 +13,8 @@ import routes from "./routes/index";
 // Create Express app
 const app: Application = express();
 
+app.disable("etag");
+
 app.use(helmet());
 
 
@@ -45,6 +47,13 @@ app.use(
 
 
 app.use(passport.initialize());
+
+app.use("/api", (_req, res, next) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  next();
+});
 
 
 app.get("/api/health", (_req, res) => {

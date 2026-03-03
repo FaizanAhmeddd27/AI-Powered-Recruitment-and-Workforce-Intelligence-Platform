@@ -1,7 +1,7 @@
 import logger from "./logger.utils";
 
-// Use require for pdf-parse due to CommonJS module compatibility
-const pdfParse = require("pdf-parse");
+// pdf-parse v2 exports a class-based API
+const { PDFParse } = require("pdf-parse");
 
 export const extractTextFromPDF = async (
   pdfBuffer: Buffer
@@ -10,17 +10,27 @@ export const extractTextFromPDF = async (
   numPages: number;
   info: any;
 }> => {
+  let parser: any = null;
   try {
     const startTime = Date.now();
 
-    const data = await pdfParse(pdfBuffer, {
-      max: 10, // Maximum pages to parse
+    parser = new PDFParse({ data: pdfBuffer });
+
+    const textResult = await parser.getText({
+      first: 10, // Maximum pages to parse
     });
+
+    let infoResult: any = null;
+    try {
+      infoResult = await parser.getInfo();
+    } catch (infoError: any) {
+      logger.warn(`Could not extract PDF metadata: ${infoError.message}`);
+    }
 
     const duration = Date.now() - startTime;
 
     // Clean extracted text
-    let cleanedText = data.text
+    let cleanedText = (textResult?.text || "")
       .replace(/\r\n/g, "\n")            // Normalize line endings
       .replace(/\n{3,}/g, "\n\n")        // Remove excessive blank lines
       .replace(/\t+/g, " ")              // Replace tabs with spaces
@@ -28,7 +38,7 @@ export const extractTextFromPDF = async (
       .trim();
 
     logger.info(
-      `PDF parsed in ${duration}ms | Pages: ${data.numpages} | Characters: ${cleanedText.length}`
+      `PDF parsed in ${duration}ms | Pages: ${textResult?.total || 0} | Characters: ${cleanedText.length}`
     );
 
     // Check if text was actually extracted
@@ -38,16 +48,24 @@ export const extractTextFromPDF = async (
 
     return {
       text: cleanedText,
-      numPages: data.numpages,
+      numPages: textResult?.total || 0,
       info: {
-        title: data.info?.Title || null,
-        author: data.info?.Author || null,
-        creator: data.info?.Creator || null,
+        title: infoResult?.info?.Title || null,
+        author: infoResult?.info?.Author || null,
+        creator: infoResult?.info?.Creator || null,
       },
     };
   } catch (error: any) {
     logger.error(`❌ PDF parsing failed: ${error.message}`);
     throw new Error(`Failed to parse PDF: ${error.message}`);
+  } finally {
+    if (parser) {
+      try {
+        await parser.destroy();
+      } catch {
+        // ignore parser cleanup errors
+      }
+    }
   }
 };
 

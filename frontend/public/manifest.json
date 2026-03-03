@@ -1,0 +1,16 @@
+{
+  "name": "RecruitAI - AI-Powered Recruitment Platform",
+  "short_name": "RecruitAI",
+  "description": "AI-powered recruitment platform that matches talent with opportunity",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#8B5E3C",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

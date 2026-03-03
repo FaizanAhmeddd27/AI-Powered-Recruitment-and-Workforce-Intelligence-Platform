@@ -275,6 +275,8 @@ export const oauthLoginOrSignup = async (data: {
   if (!user) {
     isNewUser = true;
 
+    logger.debug(`Creating new OAuth user - email: ${data.email}, full_name: ${data.full_name}`);
+
     const result = await transaction(async (client) => {
       const userResult = await client.query(UserQueries.createUser, [
         data.email,

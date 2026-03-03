@@ -52,6 +52,10 @@ export default function CandidateProfile() {
   const [profile, setProfile] = useState<FullCandidateProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [experienceSaving, setExperienceSaving] = useState(false);
+  const [educationSaving, setEducationSaving] = useState(false);
+  const [experienceDeletingId, setExperienceDeletingId] = useState<string | null>(null);
+  const [educationDeletingId, setEducationDeletingId] = useState<string | null>(null);
 
   // Experience form state
   const [showExpForm, setShowExpForm] = useState(false);
@@ -74,6 +78,15 @@ export default function CandidateProfile() {
     formState: { errors },
   } = useForm({
     resolver: zodResolver(profileSchema),
+    defaultValues: {
+      full_name: "",
+      phone: "",
+      location: "",
+      bio: "",
+      linkedin_url: "",
+      github_url: "",
+      portfolio_url: "",
+    },
   });
 
   useEffect(() => {
@@ -85,32 +98,42 @@ export default function CandidateProfile() {
     }
   }, [user]);
 
-  const loadProfile = async () => {
+  const loadProfile = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const res = await candidateApi.getProfile();
-      if (res.data) {
+      console.log("Profile response:", res);
+      if (res.success && res.data) {
+        // Handle both nested (res.data.user) and flat structure (res.data directly has user props)
+        const userData = res.data.user || res.data;
+        
         const profileData = {
-          ...res.data,
+          user: userData,
+          candidateProfile: res.data.candidateProfile || null,
+          skills: res.data.skills || [],
           experience: res.data.experience || [],
           education: res.data.education || [],
         };
+        
         setProfile(profileData);
         reset({
-          full_name: res.data.user.full_name,
-          phone: res.data.user.phone || "",
-          location: res.data.user.location || "",
-          bio: res.data.user.bio || "",
-          linkedin_url: res.data.user.linkedin_url || "",
-          github_url: res.data.user.github_url || "",
-          portfolio_url: res.data.user.portfolio_url || "",
+          full_name: userData.full_name || "",
+          phone: userData.phone || "",
+          location: userData.location || "",
+          bio: userData.bio || "",
+          linkedin_url: userData.linkedin_url || "",
+          github_url: userData.github_url || "",
+          portfolio_url: userData.portfolio_url || "",
         });
+      } else {
+        console.warn("Profile response missing data:", res);
+        toast.error("Failed to load profile");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Profile load error:", error);
-      // Don't show error toast, just log it
+      toast.error(error.response?.data?.message || "Failed to load profile");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -120,45 +143,56 @@ export default function CandidateProfile() {
       await candidateApi.updateProfile(data);
       updateUser({ full_name: data.full_name, phone: data.phone, location: data.location });
       toast.success("Profile saved!");
-      loadProfile();
-    } catch {
-      toast.error("Failed to save profile");
+      // Reload profile to ensure data is fresh and persisted
+      await loadProfile(true);
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to save profile");
     } finally {
       setSaving(false);
     }
   };
 
   const addExperience = async () => {
+    if (experienceSaving) return;
     if (!expForm.title || !expForm.company || !expForm.start_date) {
       toast.error("Title, company, and start date are required");
       return;
     }
+    setExperienceSaving(true);
     try {
       await candidateApi.addExperience(expForm);
       toast.success("Experience added!");
       setExpForm({ title: "", company: "", location: "", start_date: "", end_date: "", is_current: false, description: "" });
       setShowExpForm(false);
-      loadProfile();
+      loadProfile(true);
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to add experience");
+    } finally {
+      setExperienceSaving(false);
     }
   };
 
   const deleteExperience = async (id: string) => {
+    if (experienceDeletingId) return;
+    setExperienceDeletingId(id);
     try {
       await candidateApi.deleteExperience(id);
       toast.success("Experience removed");
-      loadProfile();
+      loadProfile(true);
     } catch {
       toast.error("Failed to remove");
+    } finally {
+      setExperienceDeletingId(null);
     }
   };
 
   const addEducation = async () => {
+    if (educationSaving) return;
     if (!eduForm.degree || !eduForm.institution) {
       toast.error("Degree and institution are required");
       return;
     }
+    setEducationSaving(true);
     try {
       await candidateApi.addEducation({
         ...eduForm,
@@ -168,24 +202,45 @@ export default function CandidateProfile() {
       toast.success("Education added!");
       setEduForm({ degree: "", institution: "", location: "", field_of_study: "", start_year: "", end_year: "", grade: "" });
       setShowEduForm(false);
-      loadProfile();
+      loadProfile(true);
     } catch (err: any) {
       toast.error(err.response?.data?.message || "Failed to add education");
+    } finally {
+      setEducationSaving(false);
     }
   };
 
   const deleteEducation = async (id: string) => {
+    if (educationDeletingId) return;
+    setEducationDeletingId(id);
     try {
       await candidateApi.deleteEducation(id);
       toast.success("Education removed");
-      loadProfile();
+      loadProfile(true);
     } catch {
       toast.error("Failed to remove");
+    } finally {
+      setEducationDeletingId(null);
     }
   };
 
   if (loading) return <LoadingSpinner fullScreen text="Loading profile..." />;
-  if (!profile) return null;
+  if (!profile) {
+    return (
+      <DashboardLayout
+        title="My Profile"
+        subtitle="Manage your professional information"
+      >
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardContent className="p-6">
+            <p className="text-destructive font-medium">Unable to load profile</p>
+            <p className="text-sm text-muted-foreground mt-1">Please check your connection and try refreshing the page</p>
+            <Button className="mt-4" onClick={() => loadProfile()}>Retry</Button>
+          </CardContent>
+        </Card>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout
@@ -285,7 +340,7 @@ export default function CandidateProfile() {
           <CardContent>
     <SkillsManager 
      skills={profile?.skills || []}  
-    onUpdate={loadProfile} 
+            onUpdate={() => loadProfile(true)} 
     />
           </CardContent>
         </Card>
@@ -297,7 +352,7 @@ export default function CandidateProfile() {
               <Briefcase className="h-4 w-4 text-primary" />
               Work Experience
             </CardTitle>
-            <Button variant="outline" size="sm" className="gap-1" onClick={() => setShowExpForm(!showExpForm)}>
+            <Button type="button" variant="outline" size="sm" className="gap-1" onClick={() => setShowExpForm(!showExpForm)}>
               <Plus className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Add</span>
             </Button>
@@ -334,8 +389,11 @@ export default function CandidateProfile() {
                     <Textarea className="mt-1" rows={2} value={expForm.description} onChange={(e) => setExpForm({ ...expForm, description: e.target.value })} />
                   </div>
                   <div className="flex gap-2">
-                    <Button size="sm" onClick={addExperience}>Save</Button>
-                    <Button size="sm" variant="ghost" onClick={() => setShowExpForm(false)}>Cancel</Button>
+                    <Button type="button" size="sm" onClick={addExperience} disabled={experienceSaving}>
+                      {experienceSaving && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                      Save
+                    </Button>
+                    <Button type="button" size="sm" variant="ghost" onClick={() => setShowExpForm(false)} disabled={experienceSaving}>Cancel</Button>
                   </div>
                 </div>
               </motion.div>
@@ -357,8 +415,12 @@ export default function CandidateProfile() {
                           <p className="text-sm font-semibold">{exp.title}</p>
                           <p className="text-xs text-muted-foreground">{exp.company}{exp.location ? ` • ${exp.location}` : ""}</p>
                         </div>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100" onClick={() => deleteExperience(exp.id)}>
-                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                        <Button type="button" variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100" onClick={() => deleteExperience(exp.id)} disabled={experienceDeletingId === exp.id}>
+                          {experienceDeletingId === exp.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-destructive" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          )}
                         </Button>
                       </div>
                       <p className="mt-0.5 text-xs text-muted-foreground flex items-center gap-1">
@@ -381,7 +443,7 @@ export default function CandidateProfile() {
               <GraduationCap className="h-4 w-4 text-primary" />
               Education
             </CardTitle>
-            <Button variant="outline" size="sm" className="gap-1" onClick={() => setShowEduForm(!showEduForm)}>
+            <Button type="button" variant="outline" size="sm" className="gap-1" onClick={() => setShowEduForm(!showEduForm)}>
               <Plus className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Add</span>
             </Button>
@@ -418,8 +480,11 @@ export default function CandidateProfile() {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Button size="sm" onClick={addEducation}>Save</Button>
-                    <Button size="sm" variant="ghost" onClick={() => setShowEduForm(false)}>Cancel</Button>
+                    <Button type="button" size="sm" onClick={addEducation} disabled={educationSaving}>
+                      {educationSaving && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                      Save
+                    </Button>
+                    <Button type="button" size="sm" variant="ghost" onClick={() => setShowEduForm(false)} disabled={educationSaving}>Cancel</Button>
                   </div>
                 </div>
               </motion.div>
@@ -441,8 +506,12 @@ export default function CandidateProfile() {
                           <p className="text-sm font-semibold">{edu.degree}{edu.field_of_study ? ` in ${edu.field_of_study}` : ""}</p>
                           <p className="text-xs text-muted-foreground">{edu.institution}</p>
                         </div>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100" onClick={() => deleteEducation(edu.id)}>
-                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                        <Button type="button" variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100" onClick={() => deleteEducation(edu.id)} disabled={educationDeletingId === edu.id}>
+                          {educationDeletingId === edu.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-destructive" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                          )}
                         </Button>
                       </div>
                       <p className="mt-0.5 text-xs text-muted-foreground">

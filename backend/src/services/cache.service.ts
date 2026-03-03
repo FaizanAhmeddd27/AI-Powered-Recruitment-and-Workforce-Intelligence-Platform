@@ -97,6 +97,7 @@ export const invalidateRecruiterCaches = async (
   try {
     await deleteCachePattern(`recruiter:jobs:${recruiterId}:*`);
     await deleteCache(CacheKeys.recruiterStats(recruiterId));
+    await deleteCache(`recruiter:dashboard:v2:${recruiterId}`);
     logger.debug(`Recruiter caches invalidated: ${recruiterId}`);
   } catch (error: any) {
     logger.error(`❌ Recruiter cache invalidation failed: ${error.message}`);

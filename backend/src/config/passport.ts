@@ -78,7 +78,13 @@ passport.use(
     ) => {
       try {
         const email = profile.emails?.[0]?.value;
-        const fullName = profile.displayName || `${profile.name?.givenName || ""} ${profile.name?.familyName || ""}`.trim();
+        let fullName = profile.displayName || `${profile.name?.givenName || ""} ${profile.name?.familyName || ""}`.trim();
+        
+        // Fallback to email username if no name provided
+        if (!fullName || fullName.length === 0) {
+          fullName = email?.split('@')[0] || "User";
+        }
+        
         const avatarUrl = profile.photos?.[0]?.value;
         const providerId = profile.id;
 
@@ -88,7 +94,7 @@ passport.use(
           });
         }
 
-        logger.debug(`Google OAuth for: ${email}`);
+        logger.debug(`Google OAuth for: ${email}, full_name: ${fullName}`);
 
         // Return profile data - actual DB logic handled in controller
         return done(null, {

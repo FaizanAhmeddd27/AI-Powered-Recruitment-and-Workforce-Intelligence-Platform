@@ -12,6 +12,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { useAuth } from "@/context/AuthContext";
 import { applicationsApi } from "@/api/applications.api";
+import { notificationAPI } from "@/api/notification.api";
+import { interviewAPI } from "@/api/interview.api";
+import { offerAPI } from "@/api/offer.api";
 import { aiApi } from "@/api/ai.api";
 import { formatDate, timeAgo, formatSalary } from "@/lib/utils";
 import { toast } from "sonner";
@@ -24,6 +27,11 @@ import {
   ArrowRight,
   TrendingUp,
   Target,
+  Bell,
+  Calendar,
+  Gift,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import type { Application, JobRecommendation } from "@/types";
 
@@ -31,27 +39,184 @@ export default function CandidateDashboard() {
   const { user } = useAuth();
   const [stats, setStats] = useState<any>(null);
   const [applications, setApplications] = useState<Application[]>([]);
-  const [recommendations, setRecommendations] = useState<JobRecommendation[]>(
-    []
-  );
+  const [recommendations, setRecommendations] = useState<JobRecommendation[]>([]);
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [interviews, setInterviews] = useState<any[]>([]);
+  const [offers, setOffers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) =>
+        setTimeout(() => reject(new Error("Request timeout")), timeoutMs)
+      ),
+    ]);
+  };
 
   useEffect(() => {
     loadDashboard();
+
+    const loadingSafetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 8000);
+
+    const intervalId = setInterval(() => {
+      loadDashboard(true);
+    }, 10000);
+
+    const handleFocus = () => {
+      loadDashboard(true);
+    };
+
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      clearTimeout(loadingSafetyTimer);
+      clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocus);
+    };
   }, []);
 
-  const loadDashboard = async () => {
+  const loadDashboard = async (silent: boolean = false) => {
     try {
-      setLoading(true);
-      const [statsRes, appsRes] = await Promise.allSettled([
-        applicationsApi.getCandidateStats(),
-        applicationsApi.getMine({ limit: 5, sort_by: "applied_at", sort_order: "desc" }),
+      if (!silent) {
+        setLoading(true);
+      }
+      const [statsRes, appsRes, notifRes, offersRes] = await Promise.allSettled([
+        withTimeout(applicationsApi.getCandidateStats(), 7000),
+        withTimeout(
+          applicationsApi.getMine({ limit: 20, sort_by: "applied_at", sort_order: "desc" }),
+          7000
+        ),
+        withTimeout(notificationAPI.getNotifications(10, 0), 7000),
+        withTimeout(offerAPI.getCandidateOffers(), 7000),
       ]);
+
+      let recentApplications: Application[] = [];
+      let latestNotifications: any[] = [];
+      let resolvedOffers: any[] = [];
 
       if (statsRes.status === "fulfilled" && statsRes.value.data)
         setStats(statsRes.value.data);
-      if (appsRes.status === "fulfilled" && appsRes.value.data)
-        setApplications(appsRes.value.data);
+
+      if (appsRes.status === "fulfilled" && Array.isArray(appsRes.value.data)) {
+        recentApplications = appsRes.value.data;
+        setApplications(recentApplications);
+      }
+
+      if (notifRes.status === "fulfilled") {
+        const notifPayload = (notifRes.value as any)?.data;
+        const notifItems =
+          notifPayload?.data?.notifications ||
+          notifPayload?.notifications ||
+          [];
+
+        if (Array.isArray(notifItems)) {
+          latestNotifications = notifItems.slice(0, 5);
+        }
+      }
+
+      if (latestNotifications.length > 0) {
+        setNotifications(latestNotifications);
+      } else if (recentApplications.length > 0) {
+        const statusLabels: Record<string, string> = {
+          under_review: "Under Review",
+          shortlisted: "Shortlisted",
+          interview: "Interview Stage",
+          offered: "Offer Received",
+          hired: "Hired",
+          rejected: "Rejected",
+        };
+
+        const fallback = recentApplications
+          .filter((app) => app.status !== "pending")
+          .slice(0, 5)
+          .map((app) => ({
+            id: `status-${app.id}`,
+            message: `${statusLabels[app.status] || app.status} • ${app.job_title || "Application"}`,
+            created_at: app.updated_at || app.applied_at,
+            is_read: false,
+          }));
+
+        setNotifications(fallback);
+      } else {
+        setNotifications([]);
+      }
+
+      if (offersRes.status === "fulfilled") {
+        const offersPayload = (offersRes.value as any)?.data;
+        const offerItems = offersPayload?.data || offersPayload || [];
+        resolvedOffers = Array.isArray(offerItems) ? offerItems : [];
+      }
+
+      if (resolvedOffers.length === 0 && recentApplications.length > 0) {
+        resolvedOffers = recentApplications
+          .filter((app) => app.status === "offered")
+          .map((app) => ({
+            id: `offer-stage-${app.id}`,
+            application_id: app.id,
+            status: "pending",
+            is_fallback: true,
+            job_title: app.job_title,
+            offer_expiry_date: null,
+            salary_offered: null,
+          }));
+      }
+
+      setOffers(resolvedOffers.slice(0, 5));
+
+      if (recentApplications.length > 0) {
+        const interviewStageApps = recentApplications.filter(
+          (app) => app.status === "interview"
+        );
+
+        if (interviewStageApps.length > 0) {
+          const fallbackInterviewItems = interviewStageApps.map((app) => ({
+            id: `interview-stage-${app.id}`,
+            application_id: app.id,
+            status: "scheduled",
+            scheduled_at: null,
+            job_title: app.job_title,
+            job_company: app.job_company,
+          }));
+
+          const interviewRequests = await Promise.allSettled(
+            interviewStageApps.map((app) =>
+              interviewAPI.getApplicationInterviews(app.id).then((response) => ({
+                app,
+                response,
+              }))
+            )
+          );
+
+          const interviewItems = interviewRequests
+            .filter((result): result is PromiseFulfilledResult<any> => result.status === "fulfilled")
+            .flatMap((result) => {
+              const app = result.value?.app;
+              const payload = result.value?.response?.data;
+              const items = payload?.data || payload || [];
+
+              if (!Array.isArray(items)) {
+                return [];
+              }
+
+              return items.map((item: any) => ({
+                ...item,
+                job_title: app.job_title,
+                job_company: app.job_company,
+              }));
+            });
+
+          setInterviews(
+            (interviewItems.length > 0 ? interviewItems : fallbackInterviewItems).slice(0, 5)
+          );
+        } else {
+          setInterviews([]);
+        }
+      } else {
+        setInterviews([]);
+      }
 
       // Load recommendations separately (may fail if no skills)
       try {
@@ -63,9 +228,13 @@ export default function CandidateDashboard() {
         // ignore - no skills yet
       }
     } catch (err) {
-      toast.error("Failed to load dashboard data");
+      if (!silent) {
+        toast.error("Failed to load dashboard data");
+      }
     } finally {
-      setLoading(false);
+      if (!silent) {
+        setLoading(false);
+      }
     }
   };
 
@@ -251,6 +420,244 @@ export default function CandidateDashboard() {
                     </Link>
                   </motion.div>
                 ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Notifications, Interviews, Offers */}
+      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        {/* Notifications */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <CardTitle className="flex items-center gap-2 text-base font-semibold">
+              <Bell className="h-4 w-4 text-primary" />
+              Notifications
+            </CardTitle>
+            <div className="text-xs font-semibold text-primary bg-primary/10 px-2 py-1 rounded">
+              {notifications.filter((n: any) => !n.is_read).length}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {notifications.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No notifications yet
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {notifications.map((notif: any) => (
+                  <motion.div
+                    key={notif.id}
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`rounded-lg p-3 text-xs transition-colors ${
+                      notif.is_read
+                        ? "bg-muted/30 text-muted-foreground"
+                        : "bg-primary/10 text-foreground border border-primary/20"
+                    }`}
+                  >
+                    <p className="font-medium">{notif.message}</p>
+                    <p className="text-xs mt-1 opacity-70">
+                      {new Date(notif.created_at).toLocaleDateString()}
+                    </p>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Interviews */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <CardTitle className="flex items-center gap-2 text-base font-semibold">
+              <Calendar className="h-4 w-4 text-blue-500" />
+              Interviews
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {interviews.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No interviews scheduled
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {interviews.map((interview: any) => (
+                  <motion.div
+                    key={interview.id}
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-lg border border-border p-3"
+                  >
+                    <p className="text-sm font-medium text-foreground">
+                      {interview.job_title || "Interview"}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {interview.scheduled_at
+                        ? new Date(interview.scheduled_at).toLocaleDateString(
+                            "en-US",
+                            {
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            }
+                          )
+                        : "Interview stage (schedule details pending)"}
+                    </p>
+                    {interview.status === "completed" && (
+                      <div className="mt-2 flex items-center gap-1 text-xs text-green-600">
+                        <CheckCircle2 className="h-3 w-3" />
+                        Completed
+                      </div>
+                    )}
+                    {(interview.status === "scheduled" || interview.status === "rescheduled") &&
+                      !interview.is_fallback && (
+                        <div className="mt-2 flex gap-2 border-t border-border pt-2">
+                          <Button
+                            size="xs"
+                            className="h-7 flex-1 text-xs"
+                            onClick={async () => {
+                              try {
+                                await interviewAPI.respondToInterview(interview.id, {
+                                  response: "accepted",
+                                });
+                                toast.success("Interview accepted");
+                                loadDashboard();
+                              } catch {
+                                toast.error("Failed to accept interview");
+                              }
+                            }}
+                          >
+                            Accept
+                          </Button>
+                          <Button
+                            size="xs"
+                            variant="outline"
+                            className="h-7 flex-1 text-xs"
+                            onClick={async () => {
+                              try {
+                                await interviewAPI.respondToInterview(interview.id, {
+                                  response: "declined",
+                                });
+                                toast.success("Interview declined");
+                                loadDashboard();
+                              } catch {
+                                toast.error("Failed to decline interview");
+                              }
+                            }}
+                          >
+                            Decline
+                          </Button>
+                        </div>
+                      )}
+                  </motion.div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Offers */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-3">
+            <CardTitle className="flex items-center gap-2 text-base font-semibold">
+              <Gift className="h-4 w-4 text-amber-500" />
+              Offers
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {offers.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">
+                No active offers
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {offers.map((offer: any) => {
+                  const expiryDateValue = offer.offer_expiry_date || offer.expiry_date;
+                  const expiryDate = expiryDateValue ? new Date(expiryDateValue) : null;
+                  const daysLeft = expiryDate
+                    ? Math.ceil((expiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+                    : null;
+
+                  return (
+                    <motion.div
+                      key={offer.id}
+                      initial={{ opacity: 0, y: -5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="rounded-lg border border-border p-3 space-y-2"
+                    >
+                      <p className="text-sm font-medium text-foreground">
+                        {offer.job_title || offer.job?.title || "Offer"}
+                      </p>
+                      {offer.salary_offered && (
+                        <p className="text-xs text-green-600 font-semibold">
+                          ₹{Number(offer.salary_offered).toLocaleString("en-IN")} / year
+                        </p>
+                      )}
+                      {daysLeft !== null && daysLeft > 0 && (
+                        <p className="text-xs text-amber-600">
+                          Expires in {daysLeft} day{daysLeft !== 1 ? "s" : ""}
+                        </p>
+                      )}
+                      {offer.is_fallback && (
+                        <p className="text-xs text-muted-foreground">
+                          Offer stage reached (details pending from recruiter)
+                        </p>
+                      )}
+                      {offer.status === "accepted" && (
+                        <div className="flex items-center gap-1 text-xs text-green-600">
+                          <CheckCircle2 className="h-3 w-3" />
+                          Accepted
+                        </div>
+                      )}
+                      {offer.status === "declined" && (
+                        <div className="flex items-center gap-1 text-xs text-red-600">
+                          <XCircle className="h-3 w-3" />
+                          Declined
+                        </div>
+                      )}
+                      {offer.status === "pending" && !offer.is_fallback && (
+                        <div className="flex gap-2 mt-2 pt-2 border-t border-border">
+                          <Button
+                            size="xs"
+                            className="flex-1 h-7 text-xs"
+                            onClick={async () => {
+                              try {
+                                await offerAPI.acceptOffer(offer.id);
+                                toast.success("Offer accepted!");
+                                loadDashboard();
+                              } catch {
+                                toast.error("Failed to accept offer");
+                              }
+                            }}
+                          >
+                            Accept
+                          </Button>
+                          <Button
+                            size="xs"
+                            variant="outline"
+                            className="flex-1 h-7 text-xs"
+                            onClick={async () => {
+                              try {
+                                await offerAPI.declineOffer(offer.id, {
+                                  reason: "Not interested",
+                                });
+                                toast.success("Offer declined");
+                                loadDashboard();
+                              } catch {
+                                toast.error("Failed to decline offer");
+                              }
+                            }}
+                          >
+                            Decline
+                          </Button>
+                        </div>
+                      )}
+                    </motion.div>
+                  );
+                })}
               </div>
             )}
           </CardContent>

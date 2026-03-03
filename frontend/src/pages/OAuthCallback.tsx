@@ -3,11 +3,13 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { authApi } from "@/api/auth.api";
 import LoadingSpinner from "@/components/shared/LoadingSpinner";
 import { toast } from "sonner";
+import { useAuth } from "@/context/AuthContext";
 
 export default function OAuthCallback() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const hasRun = useRef(false);
+  const { completeOAuthLogin } = useAuth();
 
   useEffect(() => {
     if (hasRun.current) return;
@@ -31,8 +33,33 @@ export default function OAuthCallback() {
         return;
       }
 
+      const processedKey = `oauth_processed_${token}`;
+      if (sessionStorage.getItem(processedKey) === "1") {
+        const savedUser = localStorage.getItem("user");
+        if (savedUser) {
+          try {
+            const user = JSON.parse(savedUser);
+            const paths: Record<string, string> = {
+              candidate: "/candidate/dashboard",
+              recruiter: "/recruiter/dashboard",
+              admin: "/admin/dashboard",
+            };
+            navigate(paths[user?.role] || "/candidate/dashboard", {
+              replace: true,
+            });
+            return;
+          } catch {
+            // continue to fallback below
+          }
+        }
+
+        navigate("/login", { replace: true });
+        return;
+      }
+      sessionStorage.setItem(processedKey, "1");
+
       try {
-        // Save tokens first
+        // Ensure token is available for authApi.getMe interceptor/header
         localStorage.setItem("accessToken", token);
         if (refreshToken) {
           localStorage.setItem("refreshToken", refreshToken);
@@ -42,27 +69,41 @@ export default function OAuthCallback() {
         const response = await authApi.getMe();
         if (response.success && response.data?.user) {
           const user = response.data.user;
-          localStorage.setItem("user", JSON.stringify(user));
+          completeOAuthLogin({
+            user,
+            accessToken: token,
+            refreshToken: refreshToken || undefined,
+          });
 
           // Store welcome message for after redirect
+          const userName = user.full_name?.trim() || "there";
           const welcomeMessage = isNew 
-            ? `Welcome to AI Recruit, ${user.full_name}!`
-            : `Welcome back, ${user.full_name}!`;
+            ? `Welcome to AI Recruit, ${userName}!`
+            : `Welcome back, ${userName}!`;
           localStorage.setItem("welcomeMessage", welcomeMessage);
 
-          // Navigate to dashboard with full page reload to trigger auth state update
+          // Navigate to dashboard without full page reload
           const paths: Record<string, string> = {
             candidate: "/candidate/dashboard",
             recruiter: "/recruiter/dashboard",
+            admin: "/admin/dashboard",
           };
-          
-          // Use window.location to force a full reload and auth state initialization
-          window.location.href = paths[user.role] || "/candidate/dashboard";
+
+          const targetPath = paths[user.role] || "/candidate/dashboard";
+          navigate(targetPath, { replace: true });
+
+          setTimeout(() => {
+            if (window.location.pathname === "/oauth/callback") {
+              window.location.replace(targetPath);
+            }
+          }, 300);
         } else {
           throw new Error("Invalid user data");
         }
       } catch (error) {
+        sessionStorage.removeItem(processedKey);
         localStorage.removeItem("accessToken");
+        localStorage.removeItem("refreshToken");
         localStorage.removeItem("user");
         toast.error("Failed to complete authentication");
         navigate("/login", { replace: true });
@@ -72,9 +113,5 @@ export default function OAuthCallback() {
     handleCallback();
   }, [searchParams, navigate]);
 
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      {/* Empty - redirect happens immediately */}
-    </div>
-  );
+  return <LoadingSpinner fullScreen text="Completing sign in..." />;
 }

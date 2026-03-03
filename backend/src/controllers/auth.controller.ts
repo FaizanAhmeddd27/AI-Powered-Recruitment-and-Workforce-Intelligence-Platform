@@ -100,6 +100,8 @@ export const googleCallback = (
           );
         }
 
+        logger.debug(`Google callback - Email: ${profile.email}, Name: ${profile.full_name}`);
+
         // Use oauth service
         const result = await authService.oauthLoginOrSignup({
           email: profile.email,
@@ -258,6 +260,10 @@ export const getMe = async (
   next: NextFunction
 ): Promise<void> => {
   try {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+
     if (!req.user) {
       throw new AppError("Not authenticated", 401);
     }

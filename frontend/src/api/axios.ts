@@ -53,6 +53,17 @@ api.interceptors.response.use(
     const originalRequest = error.config as InternalAxiosRequestConfig & {
       _retry?: boolean;
     };
+    const requestUrl = originalRequest?.url || "";
+    const isAuthEndpoint =
+      requestUrl.includes("/auth/login") ||
+      requestUrl.includes("/auth/signup") ||
+      requestUrl.includes("/auth/refresh") ||
+      requestUrl.includes("/auth/google") ||
+      requestUrl.includes("/auth/github");
+
+    if (error.response?.status === 401 && isAuthEndpoint) {
+      return Promise.reject(error);
+    }
 
     // If 401 and not already retrying
     if (error.response?.status === 401 && !originalRequest._retry) {

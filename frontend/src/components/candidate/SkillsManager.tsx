@@ -32,6 +32,7 @@ export default function SkillsManager({ skills, onUpdate }: SkillsManagerProps) 
   });
 
   const handleAdd = async () => {
+    if (loading) return;
     if (!newSkill.skill_name.trim()) {
       toast.error("Skill name is required");
       return;
@@ -39,7 +40,6 @@ export default function SkillsManager({ skills, onUpdate }: SkillsManagerProps) 
     setLoading(true);
     try {
       await candidateApi.addSkill(newSkill);
-      toast.success("Skill added!");
       setNewSkill({ skill_name: "", years_of_experience: 0, proficiency_level: "intermediate" });
       setShowForm(false);
       onUpdate();
@@ -64,10 +64,10 @@ export default function SkillsManager({ skills, onUpdate }: SkillsManagerProps) 
   };
 
   const profColors: Record<string, string> = {
-    beginner: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
-    intermediate: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-    advanced: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
-    expert: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+    beginner: "bg-blue-100/80 text-blue-900 dark:bg-blue-950/50 dark:text-blue-300 dark:border-blue-800/50",
+    intermediate: "bg-purple-100/80 text-purple-900 dark:bg-purple-950/50 dark:text-purple-300 dark:border-purple-800/50",
+    advanced: "bg-pink-100/80 text-pink-900 dark:bg-pink-950/50 dark:text-pink-300 dark:border-pink-800/50",
+    expert: "bg-emerald-100/80 text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-800/50",
   };
 
   return (
@@ -82,21 +82,22 @@ export default function SkillsManager({ skills, onUpdate }: SkillsManagerProps) 
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.8, opacity: 0 }}
-              className="group flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm shadow-sm"
+              className="group flex items-center gap-1.5 rounded-lg border border-border bg-card dark:bg-input/30 px-3 py-1.5 text-sm shadow-sm hover:shadow-md dark:shadow-md transition-all dark:border-border/60"
             >
               {skill.is_ai_extracted && (
                 <Sparkles className="h-3 w-3 text-primary" />
               )}
-              <span className="font-medium text-foreground">
+              <span className="font-medium text-foreground dark:text-foreground/95">
                 {skill.skill_name}
               </span>
-              <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${profColors[skill.proficiency_level]}`}>
+              <Badge variant="outline" className={`text-[10px] px-1.5 py-0.5 border ${profColors[skill.proficiency_level]}`}>
                 {skill.years_of_experience}y
               </Badge>
               <button
+                type="button"
                 onClick={() => handleDelete(skill.id)}
                 disabled={deleting === skill.id}
-                className="ml-0.5 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                className="ml-0.5 rounded p-0.5 text-muted-foreground opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100 disabled:opacity-50"
               >
                 {deleting === skill.id ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
@@ -111,9 +112,10 @@ export default function SkillsManager({ skills, onUpdate }: SkillsManagerProps) 
         {/* Add button */}
         {!showForm && (
           <Button
+            type="button"
             variant="outline"
             size="sm"
-            className="gap-1 rounded-lg border-dashed"
+            className="gap-1.5 rounded-lg border-dashed border-primary/50 hover:border-primary dark:hover:bg-input/50 dark:border-input/60 dark:text-foreground/80"
             onClick={() => setShowForm(true)}
           >
             <Plus className="h-3.5 w-3.5" />
@@ -131,10 +133,10 @@ export default function SkillsManager({ skills, onUpdate }: SkillsManagerProps) 
             exit={{ height: 0, opacity: 0 }}
             className="mt-4 overflow-hidden"
           >
-            <div className="rounded-xl border border-border bg-card p-4">
+            <div className="rounded-xl border border-border bg-card dark:bg-input/20 dark:border-border/60 p-4 space-y-3">
               <div className="grid gap-3 sm:grid-cols-3">
                 <div>
-                  <Label className="text-xs">Skill Name</Label>
+                  <Label className="text-xs font-medium text-foreground dark:text-foreground/90">Skill Name</Label>
                   <Input
                     placeholder="e.g. React"
                     className="mt-1 h-9"
@@ -145,7 +147,7 @@ export default function SkillsManager({ skills, onUpdate }: SkillsManagerProps) 
                   />
                 </div>
                 <div>
-                  <Label className="text-xs">Years</Label>
+                  <Label className="text-xs font-medium text-foreground dark:text-foreground/90">Years</Label>
                   <Input
                     type="number"
                     min={0}
@@ -161,7 +163,7 @@ export default function SkillsManager({ skills, onUpdate }: SkillsManagerProps) 
                   />
                 </div>
                 <div>
-                  <Label className="text-xs">Level</Label>
+                  <Label className="text-xs font-medium text-foreground dark:text-foreground/90">Level</Label>
                   <Select
                     value={newSkill.proficiency_level}
                     onValueChange={(v) =>
@@ -180,12 +182,13 @@ export default function SkillsManager({ skills, onUpdate }: SkillsManagerProps) 
                   </Select>
                 </div>
               </div>
-              <div className="mt-3 flex gap-2">
-                <Button size="sm" onClick={handleAdd} disabled={loading}>
-                  {loading && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
-                  Add
+              <div className="flex gap-2 pt-1">
+                <Button type="button" size="sm" onClick={handleAdd} disabled={loading} className="gap-1">
+                  {loading && <Loader2 className="h-3 w-3 animate-spin" />}
+                  Add Skill
                 </Button>
                 <Button
+                  type="button"
                   size="sm"
                   variant="ghost"
                   onClick={() => setShowForm(false)}

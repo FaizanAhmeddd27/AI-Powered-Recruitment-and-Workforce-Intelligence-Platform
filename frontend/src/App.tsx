@@ -6,15 +6,18 @@ import LoadingSpinner from "@/components/shared/LoadingSpinner";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import ProtectedRoute from "@/components/shared/ProtectedRoute";
 import RoleRoute from "@/components/shared/RoleRoute";
+import { Toaster } from "sonner";
+import OAuthCallback from "@/pages/OAuthCallback";
+import CandidateDashboard from "@/pages/candidate/Dashboard";
+
 
 
 const Landing = lazy(() => import("@/pages/Landing"));
 const Login = lazy(() => import("@/pages/Login"));
 const Signup = lazy(() => import("@/pages/Signup"));
-const OAuthCallback = lazy(() => import("@/pages/OAuthCallback"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
-const CandidateDashboard = lazy(() => import("@/pages/candidate/Dashboard"));
+// Candidate pages
 const CandidateProfile = lazy(() => import("@/pages/candidate/Profile"));
 const CandidateResume = lazy(() => import("@/pages/candidate/Resume"));
 const BrowseJobs = lazy(() => import("@/pages/candidate/BrowseJobs"));
@@ -22,36 +25,46 @@ const JobDetail = lazy(() => import("@/pages/candidate/JobDetail"));
 const MyApplications = lazy(() => import("@/pages/candidate/MyApplications"));
 const Recommendations = lazy(() => import("@/pages/candidate/Recommendations"));
 
+// Recruiter pages
 const RecruiterDashboard = lazy(() => import("@/pages/recruiter/Dashboard"));
 const PostJob = lazy(() => import("@/pages/recruiter/PostJob"));
+const EditJob = lazy(() => import("@/pages/recruiter/EditJob"));
 const MyJobs = lazy(() => import("@/pages/recruiter/MyJobs"));
 const JobApplications = lazy(() => import("@/pages/recruiter/JobApplications"));
 const CandidateProfileView = lazy(() => import("@/pages/recruiter/CandidateProfile"));
 const RankedCandidates = lazy(() => import("@/pages/recruiter/RankedCandidates"));
 
+// Admin pages
 const AdminDashboard = lazy(() => import("@/pages/admin/Dashboard"));
 const AdminUsers = lazy(() => import("@/pages/admin/Users"));
 const AdminAnalytics = lazy(() => import("@/pages/admin/Analytics"));
 const AdminSystemHealth = lazy(() => import("@/pages/admin/SystemHealth"));
 
-
+// SUSPENSE FALLBACK
 function PageLoader() {
   return <LoadingSpinner fullScreen text="Loading page..." />;
 }
 
+// APP COMPONENT
 export default function App() {
-  const [appLoading, setAppLoading] = useState(() => {
-    // Skip loading if user is already authenticated
-    return !localStorage.getItem("accessToken");
-  });
+  const [appLoading, setAppLoading] = useState(true);
 
   useEffect(() => {
-    if (appLoading) {
-      // Only show brief loading for first-time visitors
-      const timer = setTimeout(() => setAppLoading(false), 500);
-      return () => clearTimeout(timer);
-    }
-  }, [appLoading]);
+    // Simulate initial resource loading
+    const timer = setTimeout(() => setAppLoading(false), 1500);
+    
+    // Preconnect to API
+    const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:5000";
+    const link = document.createElement("link");
+    link.rel = "preconnect";
+    link.href = apiUrl;
+    document.head.appendChild(link);
+    
+    return () => {
+      clearTimeout(timer);
+      document.head.removeChild(link);
+    };
+  }, []);
 
   return (
     <ErrorBoundary>
@@ -62,16 +75,17 @@ export default function App() {
         <AuthProvider>
           <Suspense fallback={<PageLoader />}>
             <Routes>
-            
+              {/* Public Routes */}
               <Route path="/" element={<Landing />} />
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/oauth/callback" element={<OAuthCallback />} />
 
+              {/* Jobs browsing is public */}
               <Route path="/jobs" element={<BrowseJobs />} />
               <Route path="/jobs/:id" element={<JobDetail />} />
 
-   
+              {/* Candidate Routes */}
               <Route
                 path="/candidate/dashboard"
                 element={
@@ -113,7 +127,7 @@ export default function App() {
                 }
               />
 
-             
+              {/* Recruiter Routes */}
               <Route
                 path="/recruiter/dashboard"
                 element={
@@ -135,6 +149,14 @@ export default function App() {
                 element={
                   <RoleRoute allowedRoles={["recruiter"]}>
                     <MyJobs />
+                  </RoleRoute>
+                }
+              />
+              <Route
+                path="/recruiter/edit-job/:jobId"
+                element={
+                  <RoleRoute allowedRoles={["recruiter"]}>
+                    <EditJob />
                   </RoleRoute>
                 }
               />
@@ -163,7 +185,7 @@ export default function App() {
                 }
               />
 
-           
+              {/* Admin Routes */}
               <Route
                 path="/admin/dashboard"
                 element={
@@ -197,10 +219,19 @@ export default function App() {
                 }
               />
 
-         
+              {/* 404 */}
               <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>
+          <Toaster
+            position="top-right"
+            richColors
+            closeButton
+            toastOptions={{
+              duration: 4000,
+              className: "font-sans",
+            }}
+          />
         </AuthProvider>
       )}
     </ErrorBoundary>

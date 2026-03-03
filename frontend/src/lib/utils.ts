@@ -44,7 +44,8 @@ export function timeAgo(date: string | Date): string {
   return formatDate(date);
 }
 
-export function getInitials(name: string): string {
+export function getInitials(name: string | null | undefined): string {
+  if (!name) return "U";
   return name
     .split(" ")
     .map((n) => n[0])

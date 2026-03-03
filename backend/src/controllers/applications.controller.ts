@@ -221,32 +221,6 @@ export const addNotes = async (
 };
 
 
-export const withdrawApplication = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    if (!req.user) {
-      throw new AppError("Authentication required", 401);
-    }
-
-    const { id } = req.params as { id: string };
-    const { reason } = req.body || {};
-
-    const updated = await applicationsService.withdrawApplication(
-      id,
-      req.user.userId,
-      reason
-    );
-
-    sendSuccess(res, 200, "Application withdrawn successfully", updated);
-  } catch (error) {
-    next(error);
-  }
-};
-
-
 export const getCandidateStats = async (
   req: Request,
   res: Response,
@@ -333,6 +307,32 @@ export const checkIfApplied = async (
     sendSuccess(res, 200, "Application check completed", {
       has_applied: hasApplied,
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+export const withdrawApplication = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    if (!req.user) {
+      throw new AppError("Authentication required", 401);
+    }
+
+    const { id } = req.params as { id: string };
+    const { withdrawal_reason } = req.body;
+
+    const application = await applicationsService.withdrawApplication(
+      id,
+      req.user.userId,
+      withdrawal_reason
+    );
+
+    sendSuccess(res, 200, "Application withdrawn successfully", application);
   } catch (error) {
     next(error);
   }

@@ -167,31 +167,84 @@ export const parseResume = async (
     logger.info(`Starting AI parsing for user: ${userId}`);
     const aiParsedData = await parseResumeWithAI(text);
 
+    const normalizedPersonalInfo = {
+      name: aiParsedData?.personalInfo?.name || "Unknown Candidate",
+      email: aiParsedData?.personalInfo?.email || null,
+      phone: aiParsedData?.personalInfo?.phone || null,
+      location: aiParsedData?.personalInfo?.location || null,
+      linkedin: aiParsedData?.personalInfo?.linkedin || null,
+      github: aiParsedData?.personalInfo?.github || null,
+      portfolio: aiParsedData?.personalInfo?.portfolio || null,
+    };
+
+    const normalizedExperience = (Array.isArray(aiParsedData?.experience)
+      ? aiParsedData.experience
+      : []
+    )
+      .map((item: any) => ({
+        title: item?.title || "Not specified",
+        company: item?.company || "Not specified",
+        location: item?.location || null,
+        startDate: item?.startDate || item?.endDate || "Unknown",
+        endDate: item?.endDate || null,
+        description: item?.description || "",
+        isCurrent: Boolean(item?.isCurrent),
+      }))
+      .filter((item: any) => item.title || item.company || item.description);
+
+    const normalizedSkills = (Array.isArray(aiParsedData?.skills)
+      ? aiParsedData.skills
+      : []
+    )
+      .map((skill: any) => ({
+        name: skill?.name || "Unknown Skill",
+        years: Number(skill?.years) || 0,
+        confidence: Math.max(0, Math.min(100, Number(skill?.confidence) || 0)),
+      }))
+      .filter((skill: any) => skill.name && skill.name.trim().length > 0);
+
+    const normalizedEducation = (Array.isArray(aiParsedData?.education)
+      ? aiParsedData.education
+      : []
+    )
+      .map((edu: any) => ({
+        degree: edu?.degree || "Not specified",
+        institution: edu?.institution || "Not specified",
+        location: edu?.location || null,
+        startYear: Number.isFinite(Number(edu?.startYear)) ? Number(edu.startYear) : null,
+        endYear: Number.isFinite(Number(edu?.endYear)) ? Number(edu.endYear) : null,
+        grade: edu?.grade || null,
+        fieldOfStudy: edu?.fieldOfStudy || null,
+      }))
+      .filter((edu: any) => edu.degree || edu.institution);
+
+    const normalizedConfidence = {
+      overall: Number(aiParsedData?.confidence?.overall) || 0,
+      skills: Number(aiParsedData?.confidence?.skills) || 0,
+      experience: Number(aiParsedData?.confidence?.experience) || 0,
+      education: Number(aiParsedData?.confidence?.education) || 0,
+    };
+
     // 7. Save parsed data to MongoDB
     const parsedResume = await ParsedResumeModel.findOneAndUpdate(
       { userId },
       {
         userId,
         resumeFileId: resume._id,
-        personalInfo: aiParsedData.personalInfo || {},
-        experience: aiParsedData.experience || [],
-        skills: aiParsedData.skills || [],
-        education: aiParsedData.education || [],
+        personalInfo: normalizedPersonalInfo,
+        experience: normalizedExperience,
+        skills: normalizedSkills,
+        education: normalizedEducation,
         certifications: aiParsedData.certifications || [],
         summary: aiParsedData.summary || null,
         totalExperienceYears: aiParsedData.totalExperienceYears || 0,
-        confidence: aiParsedData.confidence || {
-          overall: 0,
-          skills: 0,
-          experience: 0,
-          education: 0,
-        },
+        confidence: normalizedConfidence,
         rawText: text,
         parsedAt: new Date(),
       },
       {
         upsert: true, // Create if not exists, update if exists
-        new: true,
+        returnDocument: "after",
         runValidators: true,
       }
     );
@@ -208,8 +261,8 @@ export const parseResume = async (
     ]);
 
     // 10. Sync extracted skills to PostgreSQL candidate_skills table
-    if (aiParsedData.skills && aiParsedData.skills.length > 0) {
-      for (const skill of aiParsedData.skills) {
+    if (normalizedSkills.length > 0) {
+      for (const skill of normalizedSkills) {
         await query(
           `INSERT INTO candidate_skills (user_id, skill_name, years_of_experience, proficiency_level, is_ai_extracted)
            VALUES ($1, $2, $3, $4, TRUE)
@@ -230,7 +283,7 @@ export const parseResume = async (
         );
       }
       logger.info(
-        `${aiParsedData.skills.length} skills synced to PostgreSQL for user: ${userId}`
+        `${normalizedSkills.length} skills synced to PostgreSQL for user: ${userId}`
       );
     }
 
@@ -245,11 +298,11 @@ export const parseResume = async (
          WHERE user_id = $5`,
         [
           aiParsedData.totalExperienceYears,
-          aiParsedData.experience?.[0]
-            ? `${aiParsedData.experience[0].title} at ${aiParsedData.experience[0].company}`
+          normalizedExperience?.[0]
+            ? `${normalizedExperience[0].title} at ${normalizedExperience[0].company}`
             : null,
-          aiParsedData.experience?.[0]?.company || null,
-          aiParsedData.experience?.[0]?.title || null,
+          normalizedExperience?.[0]?.company || null,
+          normalizedExperience?.[0]?.title || null,
           userId,
         ]
       );
@@ -263,14 +316,14 @@ export const parseResume = async (
     await setCache(
       CacheKeys.parsedResume(userId),
       {
-        personalInfo: aiParsedData.personalInfo,
-        experience: aiParsedData.experience,
-        skills: aiParsedData.skills,
-        education: aiParsedData.education,
+        personalInfo: normalizedPersonalInfo,
+        experience: normalizedExperience,
+        skills: normalizedSkills,
+        education: normalizedEducation,
         certifications: aiParsedData.certifications,
         summary: aiParsedData.summary,
         totalExperienceYears: aiParsedData.totalExperienceYears,
-        confidence: aiParsedData.confidence,
+        confidence: normalizedConfidence,
       },
       CacheDuration.LONG
     );
@@ -284,15 +337,15 @@ export const parseResume = async (
 
     return {
       parsedData: {
-        personalInfo: aiParsedData.personalInfo,
-        experience: aiParsedData.experience,
-        skills: aiParsedData.skills,
-        education: aiParsedData.education,
+        personalInfo: normalizedPersonalInfo,
+        experience: normalizedExperience,
+        skills: normalizedSkills,
+        education: normalizedEducation,
         certifications: aiParsedData.certifications,
         summary: aiParsedData.summary,
         totalExperienceYears: aiParsedData.totalExperienceYears,
       },
-      confidence: aiParsedData.confidence,
+      confidence: normalizedConfidence,
     };
   } catch (error: any) {
     // Update status to failed
