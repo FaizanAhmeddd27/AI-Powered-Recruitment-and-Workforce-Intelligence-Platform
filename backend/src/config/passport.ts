@@ -67,7 +67,9 @@ passport.use(
     {
       clientID: env.GOOGLE_CLIENT_ID,
       clientSecret: env.GOOGLE_CLIENT_SECRET,
-      callbackURL: env.GOOGLE_CALLBACK_URL,
+      callbackURL: env.NODE_ENV === "production" 
+        ? "https://ai-powered-recruitment-and-workforce.onrender.com/api/auth/google/callback"
+        : env.GOOGLE_CALLBACK_URL,
       scope: ["profile", "email"],
     },
     async (
@@ -128,7 +130,9 @@ passport.use(
     {
       clientID: env.GITHUB_CLIENT_ID,
       clientSecret: env.GITHUB_CLIENT_SECRET,
-      callbackURL: env.GITHUB_CALLBACK_URL,
+      callbackURL: env.NODE_ENV === "production"
+        ? "https://ai-powered-recruitment-and-workforce.onrender.com/api/auth/github/callback"
+        : env.GITHUB_CALLBACK_URL,
       scope: ["user:email"],
     },
     async (

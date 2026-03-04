@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "eslint .",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "build:analyze": "vite build --mode analyze",
     "preview:prod": "vite preview --mode production",
@@ -15,8 +15,6 @@
     "generate-sitemap": "node scripts/generate-sitemap.js",
     "test": "vitest",
     "test:coverage": "vitest run --coverage"
-
-
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
