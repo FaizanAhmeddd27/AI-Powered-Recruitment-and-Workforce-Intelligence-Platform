@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,7 @@ interface SkillsManagerProps {
 }
 
 export default function SkillsManager({ skills, onUpdate }: SkillsManagerProps) {
+  const [localSkills, setLocalSkills] = useState<CandidateSkill[]>(skills);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -31,19 +32,37 @@ export default function SkillsManager({ skills, onUpdate }: SkillsManagerProps) 
     proficiency_level: "intermediate",
   });
 
+  // Update local skills when props change
+  useEffect(() => {
+    setLocalSkills(skills);
+  }, [skills]);
+
   const handleAdd = async () => {
     if (loading) return;
     if (!newSkill.skill_name.trim()) {
-      toast.error("Skill name is required");
       return;
     }
     setLoading(true);
+    
+    // Optimistic update
+    const tempSkill: CandidateSkill = {
+      id: `temp-${Date.now()}`,
+      skill_name: newSkill.skill_name,
+      years_of_experience: newSkill.years_of_experience,
+      proficiency_level: newSkill.proficiency_level,
+      is_ai_extracted: false,
+    };
+    setLocalSkills([...localSkills, tempSkill]);
+    setNewSkill({ skill_name: "", years_of_experience: 0, proficiency_level: "intermediate" });
+    setShowForm(false);
+    
     try {
       await candidateApi.addSkill(newSkill);
-      setNewSkill({ skill_name: "", years_of_experience: 0, proficiency_level: "intermediate" });
-      setShowForm(false);
       onUpdate();
     } catch (err: any) {
+      // Revert on error
+      setLocalSkills(localSkills);
+      setShowForm(true);
       toast.error(err.response?.data?.message || "Failed to add skill");
     } finally {
       setLoading(false);
@@ -52,12 +71,18 @@ export default function SkillsManager({ skills, onUpdate }: SkillsManagerProps) 
 
   const handleDelete = async (skillId: string) => {
     setDeleting(skillId);
+    
+    // Optimistic update
+    const originalSkills = [...localSkills];
+    setLocalSkills(localSkills.filter(s => s.id !== skillId));
+    
     try {
       await candidateApi.deleteSkill(skillId);
-      toast.success("Skill removed");
       onUpdate();
-    } catch {
-      toast.error("Failed to remove skill");
+    } catch (err: any) {
+      // Revert on error
+      setLocalSkills(originalSkills);
+      toast.error(err.response?.data?.message || "Failed to remove skill");
     } finally {
       setDeleting(null);
     }
@@ -75,7 +100,7 @@ export default function SkillsManager({ skills, onUpdate }: SkillsManagerProps) 
       {/* Skill chips */}
       <div className="flex flex-wrap gap-2">
         <AnimatePresence mode="popLayout">
-          {skills.map((skill) => (
+          {localSkills.map((skill) => (
             <motion.div
               key={skill.id}
               layout

@@ -35,7 +35,7 @@ export const createJob = async (
       data.max_experience_years,
       data.salary_min || null,
       data.salary_max || null,
-      data.salary_currency || "INR",
+      data.salary_currency || "PKR",
       data.benefits || [],
       data.expires_at || null,
     ]);

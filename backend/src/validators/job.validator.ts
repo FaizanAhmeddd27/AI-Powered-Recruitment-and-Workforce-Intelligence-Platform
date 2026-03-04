@@ -72,7 +72,7 @@ export const createJobSchema = z.object({
     .optional()
     .nullable(),
 
-  salary_currency: z.string().max(10).default("INR"),
+  salary_currency: z.string().max(10).default("PKR"),
 
   benefits: z
     .array(z.string().max(100))

@@ -39,7 +39,7 @@ export const CacheKeys = {
 
   // Admin
   adminStats: () => `admin:stats`,
-  adminAnalytics: () => `admin:analytics`,
+  adminAnalytics: () => `admin:analytics:v5`,
 
   // Rate limiting
   rateLimit: (identifier: string, endpoint: string) =>

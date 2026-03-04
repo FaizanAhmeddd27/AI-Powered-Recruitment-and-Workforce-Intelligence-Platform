@@ -233,7 +233,7 @@ export const notifyInterviewScheduled = async (
   scheduledAt: Date,
   meetingLink?: string
 ): Promise<void> => {
-  const dateStr = new Date(scheduledAt).toLocaleDateString("en-IN", {
+  const dateStr = new Date(scheduledAt).toLocaleDateString("en-PK", {
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -260,13 +260,13 @@ export const notifyOfferReceived = async (
   salary: number,
   joiningDate: Date
 ): Promise<void> => {
-  const joiningStr = new Date(joiningDate).toLocaleDateString("en-IN");
+  const joiningStr = new Date(joiningDate).toLocaleDateString("en-PK");
 
   await createNotification({
     user_id: candidateId,
     type: "offer_received",
     title: "💼 You've Received a Job Offer!",
-    message: `Congratulations! You're offered the "${jobTitle}" position with a salary of ₹${salary.toLocaleString("en-IN")}. Joining date: ${joiningStr}. Please review and respond by the offer expiry date.`,
+    message: `Congratulations! You're offered the "${jobTitle}" position with a salary of PKR ${salary.toLocaleString("en-PK")}. Joining date: ${joiningStr}. Please review and respond by the offer expiry date.`,
     related_entity_type: "application",
     related_entity_id: applicationId,
   });

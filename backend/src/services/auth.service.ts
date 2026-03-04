@@ -275,13 +275,18 @@ export const oauthLoginOrSignup = async (data: {
   if (!user) {
     isNewUser = true;
 
-    logger.debug(`Creating new OAuth user - email: ${data.email}, full_name: ${data.full_name}`);
+    logger.debug(`Creating new OAuth user - email: ${data.email}, full_name: "${data.full_name}", provider: ${data.provider}`);
 
     const result = await transaction(async (client) => {
+      // Validate data before insertion
+      if (!data.email || !data.provider || !data.providerId) {
+        throw new Error("Missing required OAuth user data");
+      }
+
       const userResult = await client.query(UserQueries.createUser, [
         data.email,
         null, // no password for OAuth
-        data.full_name,
+        data.full_name || data.email.split("@")[0] || "User", // ensure we have a name
         "candidate", // default role for OAuth
         data.provider,
         data.providerId,
@@ -290,8 +295,17 @@ export const oauthLoginOrSignup = async (data: {
 
       const newUser = userResult.rows[0];
 
+      if (!newUser) {
+        throw new Error("Failed to create user");
+      }
+
       // Create candidate profile
-      await client.query(UserQueries.createCandidateProfile, [newUser.id]);
+      try {
+        await client.query(UserQueries.createCandidateProfile, [newUser.id]);
+      } catch (error) {
+        logger.warn(`Warning: Could not create candidate profile for user ${newUser.id}:`, error);
+        // Don't fail the entire transaction if candidate profile creation fails
+      }
 
       // Log activity
       await client.query(
@@ -310,12 +324,16 @@ export const oauthLoginOrSignup = async (data: {
     });
 
     user = result;
-    logger.info(`✅ New OAuth user registered: ${data.email} (${data.provider})`);
+    logger.info(`✅ New OAuth user registered: ${data.email} with role "candidate" (${data.provider})`);
   }
 
   // Safety check - should never happen
   if (!user) {
     throw new AppError("User authentication failed", 500);
+  }
+
+  if (isNewUser && user) {
+    logger.debug(`New user details - id: ${user.id}, full_name: "${user.full_name}", email: ${user.email}`);
   }
 
   // 4. Generate tokens

@@ -508,7 +508,7 @@ export default function JobApplications() {
 
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label>Salary Offered (INR)</Label>
+              <Label>Salary Offered (PKR)</Label>
               <Input
                 type="number"
                 placeholder="2500000"

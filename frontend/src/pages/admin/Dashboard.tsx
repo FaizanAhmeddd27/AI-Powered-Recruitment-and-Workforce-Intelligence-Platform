@@ -24,7 +24,6 @@ import {
   UserX,
   ArrowUp,
   ArrowDown,
-  Clock,
   Target,
   RefreshCw,
   BarChart3,
@@ -263,7 +262,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Key Metrics Section */}
-      <div className="grid grid-cols-1 gap-4 mt-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 mt-6 md:grid-cols-2">
         <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border-blue-500/20">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -335,32 +334,6 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
 
-        <Card className="bg-gradient-to-br from-purple-500/10 to-purple-600/5 border-purple-500/20">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2">
-              <Clock className="h-4 w-4 text-purple-500" />
-              Time to Hire
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div className="text-center py-2">
-                <p className="text-3xl font-bold text-purple-600">{analytics?.avgTimeToHire || "0"}</p>
-                <p className="text-xs text-muted-foreground mt-1">days average</p>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="text-center p-2 bg-background rounded-lg">
-                  <p className="font-semibold">{analytics?.minTimeToHire || "0"}</p>
-                  <p className="text-xs text-muted-foreground">minimum</p>
-                </div>
-                <div className="text-center p-2 bg-background rounded-lg">
-                  <p className="font-semibold">{analytics?.maxTimeToHire || "0"}</p>
-                  <p className="text-xs text-muted-foreground">maximum</p>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Charts Section */}

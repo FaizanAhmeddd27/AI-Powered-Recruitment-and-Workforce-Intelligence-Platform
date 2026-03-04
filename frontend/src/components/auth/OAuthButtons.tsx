@@ -18,7 +18,7 @@ export default function OAuthButtons() {
         <Button
           type="button"
           variant="outline"
-          className="h-11 gap-2 text-sm"
+          className="h-11 gap-2 text-sm cursor-pointer"
           onClick={() => (window.location.href = authApi.getGoogleAuthUrl())}
         >
           <FaGoogle className="h-4 w-4 text-red-500" />
@@ -27,7 +27,7 @@ export default function OAuthButtons() {
         <Button
           type="button"
           variant="outline"
-          className="h-11 gap-2 text-sm"
+          className="h-11 gap-2 text-sm cursor-pointer"
           onClick={() => (window.location.href = authApi.getGithubAuthUrl())}
         >
           <FaGithub className="h-4 w-4" />

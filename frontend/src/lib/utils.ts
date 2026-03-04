@@ -5,12 +5,12 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export function formatSalary(amount: number, currency: string = "INR"): string {
-  if (currency === "INR") {
-    if (amount >= 10000000) return `₹${(amount / 10000000).toFixed(1)}Cr`;
-    if (amount >= 100000) return `₹${(amount / 100000).toFixed(1)}L`;
-    if (amount >= 1000) return `₹${(amount / 1000).toFixed(0)}K`;
-    return `₹${amount}`;
+export function formatSalary(amount: number, currency: string = "PKR"): string {
+  if (currency === "PKR") {
+    if (amount >= 10000000) return `PKR ${(amount / 10000000).toFixed(1)}Cr`;
+    if (amount >= 100000) return `PKR ${(amount / 100000).toFixed(1)}L`;
+    if (amount >= 1000) return `PKR ${(amount / 1000).toFixed(0)}K`;
+    return `PKR ${amount}`;
   }
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -20,7 +20,7 @@ export function formatSalary(amount: number, currency: string = "INR"): string {
 }
 
 export function formatDate(date: string | Date): string {
-  return new Date(date).toLocaleDateString("en-IN", {
+  return new Date(date).toLocaleDateString("en-PK", {
     year: "numeric",
     month: "short",
     day: "numeric",

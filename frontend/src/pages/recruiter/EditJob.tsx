@@ -34,7 +34,7 @@ const editJobSchema = z.object({
   max_experience_years: z.number().min(0).max(50),
   salary_min: z.number().optional().nullable(),
   salary_max: z.number().optional().nullable(),
-  salary_currency: z.string().default("INR"),
+  salary_currency: z.string().default("PKR"),
   description: z.string().min(50, "Description must be at least 50 characters"),
   benefits: z.array(z.string()),
 });
@@ -74,7 +74,7 @@ export default function EditJob() {
       max_experience_years: 5,
       salary_min: null,
       salary_max: null,
-      salary_currency: "INR",
+      salary_currency: "PKR",
       benefits: [],
     },
   });
@@ -127,7 +127,7 @@ export default function EditJob() {
           max_experience_years: Number(job.max_experience_years ?? 0),
           salary_min: job.salary_min ?? null,
           salary_max: job.salary_max ?? null,
-          salary_currency: job.salary_currency || "INR",
+          salary_currency: job.salary_currency || "PKR",
           benefits: loadedBenefits,
         });
       } catch {

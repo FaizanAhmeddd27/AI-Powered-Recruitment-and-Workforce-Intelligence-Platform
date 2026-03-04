@@ -454,10 +454,10 @@ export default function JobDetail() {
 
             {/* Expected salary */}
             <div className="space-y-2">
-              <Label>Expected Salary (₹ Lakhs, optional)</Label>
+              <Label>Expected Salary (PKR Lakhs, optional)</Label>
               <Input
                 type="number"
-                placeholder="e.g. 15 for ₹15L"
+                placeholder="e.g. 15 for PKR 15L"
                 value={expectedSalary}
                 onChange={(e) => setExpectedSalary(e.target.value)}
               />

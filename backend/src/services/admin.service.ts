@@ -170,13 +170,107 @@ export const getAnalytics = async (): Promise<any> => {
          FROM applications`
       );
 
-      // Average time to hire
-      const avgTimeToHire = await queryOne(
+      const hiredTimeStats = await queryOne(
         `SELECT
-           ROUND(AVG(EXTRACT(DAY FROM (updated_at - applied_at)))::numeric, 1) as avg_days
+           COUNT(*) as sample_count,
+           ROUND(AVG(EXTRACT(EPOCH FROM (updated_at - applied_at)) / 86400.0)::numeric, 1) as avg_days,
+           ROUND(MIN(EXTRACT(EPOCH FROM (updated_at - applied_at)) / 86400.0)::numeric, 1) as min_days,
+           ROUND(MAX(EXTRACT(EPOCH FROM (updated_at - applied_at)) / 86400.0)::numeric, 1) as max_days
          FROM applications
          WHERE status = 'hired'`
       );
+
+      const offerTimeStats = await queryOne(
+        `SELECT
+           COUNT(*) as sample_count,
+           ROUND(AVG(EXTRACT(EPOCH FROM (o.created_at - a.applied_at)) / 86400.0)::numeric, 1) as avg_days,
+           ROUND(MIN(EXTRACT(EPOCH FROM (o.created_at - a.applied_at)) / 86400.0)::numeric, 1) as min_days,
+           ROUND(MAX(EXTRACT(EPOCH FROM (o.created_at - a.applied_at)) / 86400.0)::numeric, 1) as max_days
+         FROM offers o
+         JOIN applications a ON a.id = o.application_id`
+      );
+
+      const interviewTimeStats = await queryOne(
+        `SELECT
+           COUNT(*) as sample_count,
+           ROUND(AVG(EXTRACT(EPOCH FROM (i.scheduled_at - a.applied_at)) / 86400.0)::numeric, 1) as avg_days,
+           ROUND(MIN(EXTRACT(EPOCH FROM (i.scheduled_at - a.applied_at)) / 86400.0)::numeric, 1) as min_days,
+           ROUND(MAX(EXTRACT(EPOCH FROM (i.scheduled_at - a.applied_at)) / 86400.0)::numeric, 1) as max_days
+         FROM interviews i
+         JOIN applications a ON a.id = i.application_id`
+      );
+
+      const progressionTimeStats = await queryOne(
+        `SELECT
+           COUNT(*) as sample_count,
+           ROUND(AVG(GREATEST(EXTRACT(EPOCH FROM (updated_at - applied_at)) / 86400.0, 0))::numeric, 1) as avg_days,
+           ROUND(MIN(GREATEST(EXTRACT(EPOCH FROM (updated_at - applied_at)) / 86400.0, 0))::numeric, 1) as min_days,
+           ROUND(MAX(GREATEST(EXTRACT(EPOCH FROM (updated_at - applied_at)) / 86400.0, 0))::numeric, 1) as max_days
+         FROM applications
+         WHERE status <> 'pending'`
+      );
+
+      const conversionBase = await queryOne(
+        `SELECT
+           COUNT(*) as total_applications,
+           COUNT(*) FILTER (WHERE status IN ('shortlisted', 'interview', 'offered', 'hired')) as shortlisted_stage,
+           COUNT(*) FILTER (WHERE status IN ('interview', 'offered', 'hired')) as interview_stage
+         FROM applications`
+      );
+
+      const offerConversion = await queryOne(
+        `SELECT
+           COUNT(*) as total_offers,
+           COUNT(*) FILTER (WHERE status = 'accepted') as accepted_offers
+         FROM offers`
+      );
+
+      const activeUsers = await queryOne(
+        `SELECT
+           COUNT(*) as total_users,
+           COUNT(*) FILTER (WHERE is_active = TRUE) as active_users,
+           COUNT(*) FILTER (WHERE role = 'recruiter' AND is_active = TRUE) as active_recruiters,
+           COUNT(*) FILTER (WHERE role = 'candidate' AND is_active = TRUE) as active_candidates
+         FROM users`
+      );
+
+      const activeJobCount = await queryOne(
+        `SELECT COUNT(*) as active_jobs
+         FROM jobs
+         WHERE status = 'active'`
+      );
+
+      const totalApplications = Number(conversionBase?.total_applications || 0);
+      const shortlistedStage = Number(conversionBase?.shortlisted_stage || 0);
+      const interviewStage = Number(conversionBase?.interview_stage || 0);
+      const totalOffers = Number(offerConversion?.total_offers || 0);
+      const acceptedOffers = Number(offerConversion?.accepted_offers || 0);
+      const activeJobs = Number(activeJobCount?.active_jobs || 0);
+      const activeRecruiters = Number(activeUsers?.active_recruiters || 0);
+      const activeCandidates = Number(activeUsers?.active_candidates || 0);
+      const activeUserCount = Number(activeUsers?.active_users || 0);
+      const totalUsers = Number(activeUsers?.total_users || 0);
+
+      const hiredSamples = Number(hiredTimeStats?.sample_count || 0);
+      const offerSamples = Number(offerTimeStats?.sample_count || 0);
+      const interviewSamples = Number(interviewTimeStats?.sample_count || 0);
+      const progressionSamples = Number(progressionTimeStats?.sample_count || 0);
+
+      const selectedTimeStats =
+        hiredSamples > 0
+          ? hiredTimeStats
+          : offerSamples > 0
+          ? offerTimeStats
+          : interviewSamples > 0
+          ? interviewTimeStats
+          : progressionSamples > 0
+          ? progressionTimeStats
+          : null;
+
+      const toPercent = (part: number, whole: number): string => {
+        if (!whole) return "0.0";
+        return ((part / whole) * 100).toFixed(1);
+      };
 
       return {
         userGrowth,
@@ -185,7 +279,18 @@ export const getAnalytics = async (): Promise<any> => {
         topCompanies,
         topSkills,
         hiringFunnel: funnel,
-        avgTimeToHire: avgTimeToHire?.avg_days || 0,
+        avgTimeToHire: Number(selectedTimeStats?.avg_days || 0),
+        minTimeToHire: Number(selectedTimeStats?.min_days || 0),
+        maxTimeToHire: Number(selectedTimeStats?.max_days || 0),
+        conversionRates: {
+          appToShortlist: toPercent(shortlistedStage, totalApplications),
+          shortlistToInterview: toPercent(interviewStage, shortlistedStage),
+          offerAcceptance: toPercent(acceptedOffers, totalOffers),
+        },
+        avgAppsPerJob: activeJobs > 0 ? (totalApplications / activeJobs).toFixed(1) : "0.0",
+        activeRecruiters,
+        activeCandidates,
+        engagementScore: totalUsers > 0 ? `${Math.round((activeUserCount / totalUsers) * 100)}%` : "N/A",
       };
     },
     CacheDuration.LONG

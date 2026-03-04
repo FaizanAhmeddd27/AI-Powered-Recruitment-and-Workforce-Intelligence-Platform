@@ -44,6 +44,7 @@ export default function CandidateDashboard() {
   const [interviews, setInterviews] = useState<any[]>([]);
   const [offers, setOffers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
     return Promise.race([
@@ -55,6 +56,12 @@ export default function CandidateDashboard() {
   };
 
   useEffect(() => {
+    if (!user) {
+      setError("User not authenticated");
+      setLoading(false);
+      return;
+    }
+
     loadDashboard();
 
     const loadingSafetyTimer = setTimeout(() => {
@@ -76,13 +83,19 @@ export default function CandidateDashboard() {
       clearInterval(intervalId);
       window.removeEventListener("focus", handleFocus);
     };
-  }, []);
+  }, [user]);
 
   const loadDashboard = async (silent: boolean = false) => {
     try {
+      setError(null);
       if (!silent) {
         setLoading(true);
       }
+
+      if (!user?.id) {
+        throw new Error("User ID not available");
+      }
+
       const [statsRes, appsRes, notifRes, offersRes] = await Promise.allSettled([
         withTimeout(applicationsApi.getCandidateStats(), 7000),
         withTimeout(
@@ -97,12 +110,17 @@ export default function CandidateDashboard() {
       let latestNotifications: any[] = [];
       let resolvedOffers: any[] = [];
 
-      if (statsRes.status === "fulfilled" && statsRes.value.data)
+      if (statsRes.status === "fulfilled" && statsRes.value?.data) {
         setStats(statsRes.value.data);
+      } else if (statsRes.status === "rejected") {
+        console.error("Stats fetch failed:", statsRes.reason);
+      }
 
-      if (appsRes.status === "fulfilled" && Array.isArray(appsRes.value.data)) {
+      if (appsRes.status === "fulfilled" && Array.isArray(appsRes.value?.data)) {
         recentApplications = appsRes.value.data;
         setApplications(recentApplications);
+      } else if (appsRes.status === "rejected") {
+        console.error("Applications fetch failed:", appsRes.reason);
       }
 
       if (notifRes.status === "fulfilled") {
@@ -115,6 +133,8 @@ export default function CandidateDashboard() {
         if (Array.isArray(notifItems)) {
           latestNotifications = notifItems.slice(0, 5);
         }
+      } else if (notifRes.status === "rejected") {
+        console.error("Notifications fetch failed:", notifRes.reason);
       }
 
       if (latestNotifications.length > 0) {
@@ -148,6 +168,8 @@ export default function CandidateDashboard() {
         const offersPayload = (offersRes.value as any)?.data;
         const offerItems = offersPayload?.data || offersPayload || [];
         resolvedOffers = Array.isArray(offerItems) ? offerItems : [];
+      } else if (offersRes.status === "rejected") {
+        console.error("Offers fetch failed:", offersRes.reason);
       }
 
       if (resolvedOffers.length === 0 && recentApplications.length > 0) {
@@ -221,15 +243,19 @@ export default function CandidateDashboard() {
       // Load recommendations separately (may fail if no skills)
       try {
         const recRes = await aiApi.getRecommendations(4);
-        if (recRes.data && Array.isArray(recRes.data)) {
+        if (recRes?.data && Array.isArray(recRes.data)) {
           setRecommendations(recRes.data);
         }
-      } catch {
+      } catch (err) {
+        console.warn("Recommendations fetch failed (non-critical):", err);
         // ignore - no skills yet
       }
     } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Unknown error";
+      console.error("Dashboard load error:", errorMessage, err);
       if (!silent) {
-        toast.error("Failed to load dashboard data");
+        setError(errorMessage);
+        toast.error(`Failed to load dashboard: ${errorMessage}`);
       }
     } finally {
       if (!silent) {
@@ -240,9 +266,47 @@ export default function CandidateDashboard() {
 
   if (loading) return <LoadingSpinner fullScreen text="Loading dashboard..." />;
 
+  if (error) {
+    return (
+      <DashboardLayout
+        title="Dashboard"
+        subtitle="There was an error loading your dashboard"
+      >
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="p-6 text-center">
+            <p className="text-red-600 font-medium">Error: {error}</p>
+            <Button
+              variant="outline"
+              onClick={() => loadDashboard()}
+              className="mt-4"
+            >
+              Try Again
+            </Button>
+          </CardContent>
+        </Card>
+      </DashboardLayout>
+    );
+  }
+
+  if (!user) {
+    return (
+      <DashboardLayout title="Dashboard">
+        <Card className="border-yellow-200 bg-yellow-50">
+          <CardContent className="p-6 text-center">
+            <p className="text-yellow-600 font-medium">
+              User information not available. Please log in again.
+            </p>
+          </CardContent>
+        </Card>
+      </DashboardLayout>
+    );
+  }
+
+  const firstName = user.full_name?.trim().split(" ")[0] || user.email?.split("@")[0] || "there";
+
   return (
     <DashboardLayout
-      title={`Welcome back, ${user?.full_name?.split(" ")[0] || "there"} 👋`}
+      title={`Welcome back, ${firstName} 👋`}
       subtitle="Here's an overview of your job search journey"
     >
       {/* Profile Completion */}
@@ -593,7 +657,7 @@ export default function CandidateDashboard() {
                       </p>
                       {offer.salary_offered && (
                         <p className="text-xs text-green-600 font-semibold">
-                          ₹{Number(offer.salary_offered).toLocaleString("en-IN")} / year
+                          PKR {Number(offer.salary_offered).toLocaleString("en-PK")} / year
                         </p>
                       )}
                       {daysLeft !== null && daysLeft > 0 && (

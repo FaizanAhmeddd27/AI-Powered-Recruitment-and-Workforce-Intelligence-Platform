@@ -75,6 +75,7 @@ export default function CandidateProfile() {
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(profileSchema),
@@ -87,7 +88,15 @@ export default function CandidateProfile() {
       github_url: "",
       portfolio_url: "",
     },
+    mode: "onChange",
   });
+
+  // Watch form values for debugging
+  const formValues = watch();
+  
+  useEffect(() => {
+    console.log("Current form values:", formValues);
+  }, [formValues]);
 
   useEffect(() => {
     // Only load profile if user is authenticated
@@ -96,7 +105,7 @@ export default function CandidateProfile() {
     } else {
       setLoading(false);
     }
-  }, [user]);
+  }, []); // Run only once on mount
 
   const loadProfile = async (silent = false) => {
     try {
@@ -116,7 +125,9 @@ export default function CandidateProfile() {
         };
         
         setProfile(profileData);
-        reset({
+        
+        // Reset form with loaded data - ensure proper string conversion for form values
+        const formValues = {
           full_name: userData.full_name || "",
           phone: userData.phone || "",
           location: userData.location || "",
@@ -124,7 +135,10 @@ export default function CandidateProfile() {
           linkedin_url: userData.linkedin_url || "",
           github_url: userData.github_url || "",
           portfolio_url: userData.portfolio_url || "",
-        });
+        };
+        
+        console.log("Resetting form with values:", formValues);
+        reset(formValues, { keepDefaultValues: false });
       } else {
         console.warn("Profile response missing data:", res);
         toast.error("Failed to load profile");

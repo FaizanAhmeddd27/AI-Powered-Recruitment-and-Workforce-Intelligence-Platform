@@ -268,11 +268,22 @@ export const getMe = async (
       throw new AppError("Not authenticated", 401);
     }
 
-    const user = await authService.getCurrentUser(req.user.userId);
+    const result = await authService.getCurrentUser(req.user.userId);
 
-    if (!user) {
+    if (!result) {
       throw new AppError("User not found", 404);
     }
+
+    // Handle both enriched and basic user objects
+    const user = (result as any)?.user || result;
+
+    // Validate critical user fields
+    if (!user || !user.id || !user.email || !user.role) {
+      logger.error(`❌ Invalid user data returned from getCurrentUser: ${JSON.stringify(result)}`);
+      throw new AppError("Invalid user data", 500);
+    }
+
+    logger.debug(`✅ getMe successful for user: ${user.email} (role: ${user.role})`);
 
     sendSuccess(res, 200, "User profile fetched", { user });
   } catch (error) {

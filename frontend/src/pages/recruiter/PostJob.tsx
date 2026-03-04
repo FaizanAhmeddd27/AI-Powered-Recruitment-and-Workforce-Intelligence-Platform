@@ -56,7 +56,7 @@ const postJobSchema = z.object({
   max_experience_years: z.number().min(0).max(50),
   salary_min: z.number().optional().nullable(),
   salary_max: z.number().optional().nullable(),
-  salary_currency: z.string().default("INR"),
+  salary_currency: z.string().default("PKR"),
   description: z.string().min(50, "Description must be at least 50 characters"),
   benefits: z.array(z.string()),
 });
@@ -94,7 +94,7 @@ export default function PostJob() {
       max_experience_years: 5,
       salary_min: null,
       salary_max: null,
-      salary_currency: "INR",
+      salary_currency: "PKR",
       benefits: [],
     },
   });;
@@ -291,7 +291,7 @@ export default function PostJob() {
                     <div>
                       <Label>Location *</Label>
                       <Input
-                        placeholder="e.g. Bangalore, India"
+                        placeholder="e.g. Karachi, Pakistan"
                         className="mt-1.5"
                         {...register("location")}
                       />
@@ -391,7 +391,7 @@ export default function PostJob() {
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div>
-                        <Label>Minimum Salary (₹ Lakhs)</Label>
+                        <Label>Minimum Salary (PKR Lakhs)</Label>
                         <Input
                           type="number"
                           placeholder="e.g. 15"
@@ -400,7 +400,7 @@ export default function PostJob() {
                         />
                       </div>
                       <div>
-                        <Label>Maximum Salary (₹ Lakhs)</Label>
+                        <Label>Maximum Salary (PKR Lakhs)</Label>
                         <Input
                           type="number"
                           placeholder="e.g. 25"

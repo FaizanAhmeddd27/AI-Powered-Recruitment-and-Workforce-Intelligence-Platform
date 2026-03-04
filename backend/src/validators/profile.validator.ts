@@ -20,7 +20,7 @@ export const updateCandidateProfileSchema = z.object({
   current_title: z.string().max(255).trim().optional().nullable(),
   expected_salary_min: z.number().min(0).optional().nullable(),
   expected_salary_max: z.number().min(0).optional().nullable(),
-  salary_currency: z.string().max(10).default("INR").optional(),
+  salary_currency: z.string().max(10).default("PKR").optional(),
   notice_period_days: z.number().min(0).max(365).optional(),
   is_open_to_work: z.boolean().optional(),
   preferred_job_types: z

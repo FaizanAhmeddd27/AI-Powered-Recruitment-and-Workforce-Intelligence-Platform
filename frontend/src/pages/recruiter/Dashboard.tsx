@@ -442,7 +442,7 @@ export default function RecruiterDashboard() {
                         </p>
                         {offer.salary_offered && (
                           <p className="text-xs text-green-600 font-semibold">
-                            ₹{Number(offer.salary_offered).toLocaleString("en-IN")}
+                            PKR {Number(offer.salary_offered).toLocaleString("en-PK")}
                           </p>
                         )}
                         {daysLeft > 0 && (

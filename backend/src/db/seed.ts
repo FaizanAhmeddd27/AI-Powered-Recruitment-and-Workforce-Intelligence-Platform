@@ -30,7 +30,7 @@ const seedDatabase = async (): Promise<void> => {
         "Sarah Johnson",
         "recruiter",
         true,
-        "Bangalore, India",
+        "Karachi, Pakistan",
         85,
       ]
     );
@@ -49,8 +49,8 @@ const seedDatabase = async (): Promise<void> => {
         "John Doe",
         "candidate",
         true,
-        "Bangalore, India",
-        "+91 98765 43210",
+        "Lahore, Pakistan",
+        "+92 300 1234567",
         75,
       ]
     );

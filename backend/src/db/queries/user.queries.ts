@@ -32,12 +32,12 @@ export const UserQueries = {
   updateProfile: `
     UPDATE users 
     SET full_name = COALESCE($2, full_name),
-        phone = COALESCE($3, phone),
-        location = COALESCE($4, location),
-        linkedin_url = COALESCE($5, linkedin_url),
-        github_url = COALESCE($6, github_url),
-        portfolio_url = COALESCE($7, portfolio_url),
-        bio = COALESCE($8, bio),
+        phone = $3,
+        location = $4,
+        linkedin_url = $5,
+        github_url = $6,
+        portfolio_url = $7,
+        bio = $8,
         avatar_url = COALESCE($9, avatar_url)
     WHERE id = $1
     RETURNING id, email, full_name, role, phone, location, linkedin_url, github_url, portfolio_url, bio, avatar_url, profile_completion

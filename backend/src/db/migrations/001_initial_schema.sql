@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS candidate_profiles (
     current_title VARCHAR(255),
     expected_salary_min INTEGER,
     expected_salary_max INTEGER,
-    salary_currency VARCHAR(10) DEFAULT 'INR',
+    salary_currency VARCHAR(10) DEFAULT 'PKR',
     notice_period_days INTEGER DEFAULT 0,
     is_open_to_work BOOLEAN DEFAULT TRUE,
     preferred_job_types TEXT[] DEFAULT '{}',  -- PostgreSQL array
@@ -141,7 +141,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     max_experience_years INTEGER DEFAULT 0,
     salary_min INTEGER,
     salary_max INTEGER,
-    salary_currency VARCHAR(10) DEFAULT 'INR',
+    salary_currency VARCHAR(10) DEFAULT 'PKR',
     benefits TEXT[] DEFAULT '{}',            -- PostgreSQL array
     status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'closed', 'draft', 'paused')),
     applications_count INTEGER DEFAULT 0,

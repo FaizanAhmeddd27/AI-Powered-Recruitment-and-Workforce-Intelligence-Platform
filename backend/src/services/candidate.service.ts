@@ -96,15 +96,22 @@ export const updateBasicProfile = async (
     avatar_url?: string | null;
   }
 ): Promise<any> => {
+  // Convert empty strings to null for proper handling
+  const normalizeValue = (val: string | null | undefined) => {
+    if (val === undefined) return null;
+    if (typeof val === 'string' && val.trim() === '') return null;
+    return val;
+  };
+
   const updated = await queryOne(UserQueries.updateProfile, [
     userId,
     data.full_name || null,
-    data.phone || null,
-    data.location || null,
-    data.linkedin_url || null,
-    data.github_url || null,
-    data.portfolio_url || null,
-    data.bio || null,
+    normalizeValue(data.phone),
+    normalizeValue(data.location),
+    normalizeValue(data.linkedin_url),
+    normalizeValue(data.github_url),
+    normalizeValue(data.portfolio_url),
+    normalizeValue(data.bio),
     data.avatar_url || null,
   ]);
 
@@ -169,7 +176,7 @@ export const updateCandidateProfile = async (
         data.current_title,
         data.expected_salary_min,
         data.expected_salary_max,
-        data.salary_currency || "INR",
+        data.salary_currency || "PKR",
         data.notice_period_days,
         data.is_open_to_work,
         data.preferred_job_types || null,
@@ -192,7 +199,7 @@ export const updateCandidateProfile = async (
         data.current_title || null,
         data.expected_salary_min || null,
         data.expected_salary_max || null,
-        data.salary_currency || "INR",
+        data.salary_currency || "PKR",
         data.notice_period_days || 0,
         data.is_open_to_work !== undefined ? data.is_open_to_work : true,
         data.preferred_job_types || [],

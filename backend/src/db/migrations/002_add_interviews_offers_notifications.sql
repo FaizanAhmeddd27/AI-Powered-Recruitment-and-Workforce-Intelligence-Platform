@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS offers (
     candidate_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     
     salary_offered INTEGER NOT NULL,
-    salary_currency VARCHAR(10) DEFAULT 'INR',
+    salary_currency VARCHAR(10) DEFAULT 'PKR',
     benefits TEXT[] DEFAULT '{}',           -- Array of benefits
     joining_date DATE NOT NULL,
     

@@ -8,7 +8,9 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "db:migrate": "ts-node src/db/migrations/run.ts",
-    "db:seed": "ts-node src/db/seed.ts"
+    "db:seed": "ts-node src/db/seed.ts",
+    "postinstall": "npm run build"  
+    
   },
   "keywords": [],
   "author": "",
